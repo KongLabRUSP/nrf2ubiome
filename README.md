@@ -13,6 +13,9 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 12/03/2018
+* Changed virtual memory size on CVI computer #3 to 64Gb (see Reference #2 below for instructions)
+
 ### 12/01/2018
 * Initial FastQ processing with DADA2
 
@@ -30,3 +33,5 @@ Original files were downloaded form [here](https://www.dropbox.com/sh/5hpqzgdrgq
 
 ## References<a name="ref"></a>
 1. [DADA2 Pipeline Tutorial on GitHub, Benjamin Callahan](https://benjjneb.github.io/dada2/tutorial.html)
+2. [Change Window 7 virtual memory Size](https://support.lenovo.com/us/en/solutions/HT002951)
+3. [Ruggers On-Demand High Power computing](https://ondemand.hpc.rutgers.edu), run RStudio server 9specify number of cores)
