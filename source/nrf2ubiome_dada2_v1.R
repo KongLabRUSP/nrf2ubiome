@@ -354,7 +354,9 @@ save(taxa,
      file = "data/taxa.RData")
 
 # # SIDE ANALYSIS: save taxa obtained before removeing bimeras----
-# taxa_with_bimera <- taxa
+# taxa_with_bimera <- assignTaxonomy(seqs = seqtab,
+#                                    refFasta = "~/tax/silva_nr_v128_train_set.fa.gz",
+#                                    multithread = TRUE)
 # save(taxa_with_bimera,
 #      file = "data/taxa_with_bimera.RData")
 
