@@ -17,6 +17,7 @@ invisible(utils::memory.limit(65536))
 # if (!requireNamespace("BiocManager", quietly = TRUE))
 #   install.packages("BiocManager")
 # BiocManager::install("dada2", version = "3.8")
+# BiocManager::install("phyloseq", version = "3.8")
 
 # Follow the tutorial;
 # https://benjjneb.github.io/dada2/tutorial.html
@@ -359,6 +360,23 @@ save(taxa,
 #                                    multithread = TRUE)
 # save(taxa_with_bimera,
 #      file = "data/taxa_with_bimera.RData")
+# dim(taxa_with_bimera)
+# View(head(taxa_with_bimera))
+
+# load("data/taxa_with_bimera.RData")
+# taxa <- taxa_with_bimera
+
+# Add species----
+load("data/seqtab.nochim.RData")
+
+taxa.plus <- addSpecies(taxtab = taxa,
+                        refFasta = "fastq/tax/silva_species_assignment_v128.fa.gz",
+                        verbose = TRUE)
+dim(taxa.plus)
+View(head(taxa.plus))
+save(taxa.plus,
+     file = "data/taxa.plus.RData")
+
 
 # Removing sequence rownames for display only----
 taxa.print <- taxa 
@@ -366,35 +384,93 @@ rownames(taxa.print) <- NULL
 head(taxa.print)
 
 # Handoff to phyloseq----
-samples.out <- rownames(seqtab.nochim)
-subject <- sapply(strsplit(samples.out, "D"), `[`, 1)
-gender <- substr(subject,1,1)
-subject <- substr(subject,2,999)
-day <- as.integer(sapply(strsplit(samples.out, "D"), `[`, 2))
-samdf <- data.frame(Subject=subject, Gender=gender, Day=day)
-samdf$When <- "Early"
-samdf$When[samdf$Day>100] <- "Late"
-rownames(samdf) <- samples.out
+load("data/seqtab.nochim.RData")
+dim()
+load("data/samples.RData")
+samples
 
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
+samples$ID <- paste(samples$Diet,
+                    samples$Cage,
+                    samples$MouseNum,
+                    sep = "_")
+samples$Diet_Week <- paste(samples$Diet,
+                           samples$Week,
+                           sep = "_")
+
+samples <- data.frame(samples)
+rownames(samples) <- rownames(seqtab.nochim)
+samples
+
+ps <- phyloseq(otu_table(seqtab.nochim, 
+                         taxa_are_rows = FALSE), 
+               sample_data(samples), 
                tax_table(taxa))
-ps <- prune_samples(sample_names(ps) != "Mock", ps) # Remove mock sample
 ps
 
-plot_richness(ps, x="Day", measures=c("Shannon", "Simpson"), color="When")
+# Keep Week5 samples only
+ps <- prune_samples(sample_names(ps) %in% rownames(samples)[samples$Week %in% c(5, 9)], ps)
+ps
+
+plot_richness(ps,
+              x = "Diet_Week", 
+              measures = "Shannon",
+              color = "Week") +
+  geom_line(aes(group = ID),
+            color = "black") +
+  geom_point(shape = 21,
+             size = 3,
+             color = "black")
 
 # Transform data to proportions as appropriate for Bray-Curtis distances
-ps.prop <- transform_sample_counts(ps, function(otu) otu/sum(otu))
-ord.nmds.bray <- ordinate(ps.prop, method="NMDS", distance="bray")
+ps.prop <- transform_sample_counts(ps,
+                                   function(otu) otu/sum(otu))
+ord.nmds.bray <- ordinate(ps.prop,
+                          method = "NMDS",
+                          distance = "bray")
 
-plot_ordination(ps.prop, ord.nmds.bray, color="When", title="Bray NMDS")
+plot_ordination(ps.prop,
+                ord.nmds.bray,
+                color = "Diet_Week",
+                title = "Bray NMDS") +
+  geom_point(size = 3)
 
 # Barplots
-top20 <- names(sort(taxa_sums(ps), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="Day", fill="Family") + facet_wrap(~When, scales="free_x")
+top20 <- names(sort(taxa_sums(ps),
+                    decreasing = TRUE))[1:5]
+ps.top20 <- transform_sample_counts(ps,
+                                    function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20,
+                       ps.top20)
+
+plot_bar(ps.top20, 
+         x = "Diet", 
+         fill = "Order") + 
+  facet_wrap( ~ Week, 
+              scales = "free_x")
+
+plot_bar(ps.top20, 
+         x = "Diet", 
+         fill = "Family") + 
+  facet_wrap( ~ Week, 
+              scales = "free_x") +
+  geom_tile(color = "white")
+
+plot_bar(ps.top20, 
+         x = "Diet", 
+         fill = "Genus") + 
+  facet_wrap( ~ Week, 
+              scales = "free_x")
+
+# OTU table----
+tn <- taxa_names(ps)
+length(tn)
+tn[1:10]
+
+?otu_table
+dotu <- otu_table(object = ps, taxa_are_rows = )
+dim(dotu)
+rownames(dotu) <- NULL
+head(dotu)
 
 #sessionInfo()
 # sink()
