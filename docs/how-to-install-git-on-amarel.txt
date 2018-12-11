@@ -1,4 +1,4 @@
-# how to install git on your own folder so it can be invoked by Rstudio.
+# how to install git in your own folder so it can be invoked by Rstudio on Amarel.
 # R Wu. Dec 2018
 
 # 0. create folders for git
@@ -12,7 +12,7 @@ git clone git://git.kernel.org/pub/scm/git/git.git
 
 # method 2, download source from https://www.kernel.org/pub/software/scm/git, https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.20.0.tar.gz or  https://github.com/git/git/releases. https://github.com/git/git/archive/v2.20.0.tar.gz
 
-$ wget https://git-url-above
+$ wget https://github.com/git/git/archive/v2.20.0.tar.gz # Version number may vary
 $ tar -zxf git-2.0.0.tar.gz # Version number may vary
 
 
