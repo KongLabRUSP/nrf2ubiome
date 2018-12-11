@@ -50,3 +50,17 @@ $ make install
  # https://cran.r-project.org/doc/manuals/R-admin.html#Configuration-options
 # https://cran.r-project.org/doc/manuals/R-admin.html#Simple-compilation
  # Section A.1
+ 
+ 
+ # Again /project folder is not visible in Rstudio server
+ rw409@slepner062:~/github/nrf2ubiome$df -h
+ Filesystem      Size  Used Avail Use% Mounted on
+ /dev/loop0      292M  292M     0 100% /
+   none             63G  2.3G   61G   4% /tmp
+ devtmpfs         63G     0   63G   0% /dev
+ tmpfs            63G  2.8M   63G   1% /dev/shm
+ tmpfs            16M  8.0K   16M   1% /home
+ cache           201T   71T  130T  36% /home/rw409
+ rw409@slepner062:~/github/nrf2ubiome$ls /
+   bin   dev          etc   lib    library  mnt  proc  run   scif         srv  tmp  var
+ boot  environment  home  lib64  media    opt  root  sbin  singularity  sys  usr
