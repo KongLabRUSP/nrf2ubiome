@@ -19,6 +19,17 @@ invisible(utils::memory.limit(65536))
 # BiocManager::install("dada2", version = "3.8")
 # BiocManager::install("phyloseq", version = "3.8")
 
+# # To install on server:
+# # 1. Install External Dependencies
+# source("http://bioconductor.org/biocLite.R")
+# biocLite(suppressUpdates = FALSE)
+# biocLite("ShortRead", suppressUpdates = FALSE)
+# # You might need to install some more packages manually
+# # 2. Install using devtools
+# biocLite("devtools")
+# library("devtools")
+# devtools::install_github("benjjneb/dada2")
+
 # Follow the tutorial;
 # https://benjjneb.github.io/dada2/tutorial.html
 
@@ -347,7 +358,7 @@ save(seqtab.nochim,
 
 # Assign taxonomy----
 taxa <- assignTaxonomy(seqs = seqtab.nochim,
-                       refFasta = "~/tax/silva_nr_v128_train_set.fa.gz",
+                       refFasta = "fastq/tax/silva_nr_v128_train_set.fa.gz",
                        multithread = TRUE)
 dim(taxa)
 View(head(taxa))
@@ -356,7 +367,7 @@ save(taxa,
 
 # # SIDE ANALYSIS: save taxa obtained before removeing bimeras----
 # taxa_with_bimera <- assignTaxonomy(seqs = seqtab,
-#                                    refFasta = "~/tax/silva_nr_v128_train_set.fa.gz",
+#                                    refFasta = "fastq/tax/silva_nr_v128_train_set.fa.gz",
 #                                    multithread = TRUE)
 # save(taxa_with_bimera,
 #      file = "data/taxa_with_bimera.RData")
@@ -367,25 +378,39 @@ save(taxa,
 # taxa <- taxa_with_bimera
 
 # Add species----
-load("data/seqtab.nochim.RData")
+load("data/taxa.RData")
+dim(taxa)
+View(head(taxa))
 
-taxa.plus <- addSpecies(taxtab = taxa,
+load("data/seqtab.nochim.RData")
+dim(seqtab.nochim)
+View(head(t(seqtab.nochim)))
+length(colnames(seqtab.nochim))
+
+# Keep only sequences found in data----
+taxa.tmp <- taxa[rownames(taxa) %in% colnames(seqtab.nochim), ]
+View(head(taxa.tmp))
+
+# Add species----
+taxa.plus <- addSpecies(taxtab = taxa.tmp,
                         refFasta = "fastq/tax/silva_species_assignment_v128.fa.gz",
                         verbose = TRUE)
 dim(taxa.plus)
 View(head(taxa.plus))
+
+table(!is.na(taxa.plus))
+# FALSE  TRUE 
+# 20237 55076 
 save(taxa.plus,
      file = "data/taxa.plus.RData")
-
+gc()
 
 # Removing sequence rownames for display only----
-taxa.print <- taxa 
+taxa.print <- taxa.plus 
 rownames(taxa.print) <- NULL
 head(taxa.print)
 
 # Handoff to phyloseq----
-load("data/seqtab.nochim.RData")
-dim()
 load("data/samples.RData")
 samples
 
@@ -404,8 +429,10 @@ samples
 ps <- phyloseq(otu_table(seqtab.nochim, 
                          taxa_are_rows = FALSE), 
                sample_data(samples), 
-               tax_table(taxa))
+               tax_table(taxa.plus))
 ps
+save(ps,
+     file = "data/ps.RData")
 
 # Keep Week5 samples only
 ps <- prune_samples(sample_names(ps) %in% rownames(samples)[samples$Week %in% c(5, 9)], ps)
@@ -458,6 +485,12 @@ plot_bar(ps.top20,
 plot_bar(ps.top20, 
          x = "Diet", 
          fill = "Genus") + 
+  facet_wrap( ~ Week, 
+              scales = "free_x")
+
+plot_bar(ps.top20, 
+         x = "Diet", 
+         fill = "Species") + 
   facet_wrap( ~ Week, 
               scales = "free_x")
 
