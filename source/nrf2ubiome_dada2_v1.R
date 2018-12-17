@@ -397,10 +397,13 @@ taxa.plus <- addSpecies(taxtab = taxa.tmp,
                         verbose = TRUE)
 dim(taxa.plus)
 View(head(taxa.plus))
+View(taxa.plus[!is.na(taxa.plus[, 7]), ])
+write.csv(taxa.plus[!is.na(taxa.plus[, 7]), ],
+          file = "tmp/species.csv")
 
-table(!is.na(taxa.plus))
+table(!is.na(taxa.plus[, 7]))
 # FALSE  TRUE 
-# 20237 55076 
+# 10754     5 
 save(taxa.plus,
      file = "data/taxa.plus.RData")
 gc()
@@ -413,6 +416,8 @@ head(taxa.print)
 # Handoff to phyloseq----
 load("data/samples.RData")
 samples
+load("data/seqtab.nochim.RData")
+load("data/taxa.plus.RData")
 
 samples$ID <- paste(samples$Diet,
                     samples$Cage,
@@ -426,6 +431,9 @@ samples <- data.frame(samples)
 rownames(samples) <- rownames(seqtab.nochim)
 samples
 
+
+# Keep only mapped species data----
+taxa.spc <- taxa.plus[!is.na(taxa.plus)]
 ps <- phyloseq(otu_table(seqtab.nochim, 
                          taxa_are_rows = FALSE), 
                sample_data(samples), 
@@ -435,18 +443,29 @@ save(ps,
      file = "data/ps.RData")
 
 # Keep Week5 samples only
-ps <- prune_samples(sample_names(ps) %in% rownames(samples)[samples$Week %in% c(5, 9)], ps)
+# ps <- prune_samples(sample_names(ps) %in% rownames(samples)[samples$Week %in% c(5, 9)], ps)
+ps <- prune_samples(sample_names(ps) %in% rownames(samples)[samples$Week != "U"], ps)
 ps
 
-plot_richness(ps,
-              x = "Diet_Week", 
-              measures = "Shannon",
-              color = "Week") +
+p1 <- plot_richness(ps,
+                    x = "Diet_Week", 
+                    measures = "Shannon",
+                    color = "Week") +
   geom_line(aes(group = ID),
             color = "black") +
   geom_point(shape = 21,
              size = 3,
              color = "black")
+p1
+
+tiff(filename = "tmp/richness.tiff",
+     height = 5,
+     width = 6,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
 
 # Transform data to proportions as appropriate for Bray-Curtis distances
 ps.prop <- transform_sample_counts(ps,
@@ -455,19 +474,31 @@ ord.nmds.bray <- ordinate(ps.prop,
                           method = "NMDS",
                           distance = "bray")
 
-plot_ordination(ps.prop,
-                ord.nmds.bray,
-                color = "Diet_Week",
-                title = "Bray NMDS") +
+p1 <- plot_ordination(ps.prop,
+                      ord.nmds.bray,
+                      color = "Diet_Week",
+                      title = "Bray NMDS") +
   geom_point(size = 3)
+p1
+tiff(filename = "tmp/nmds.tiff",
+     height = 5,
+     width = 7,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
 
 # Barplots
+View(head(taxa_sums(ps)))
+names(taxa_sums(ps))[1:10]
 top20 <- names(sort(taxa_sums(ps),
-                    decreasing = TRUE))[1:5]
+                    decreasing = TRUE))[1:10]
 ps.top20 <- transform_sample_counts(ps,
                                     function(OTU) OTU/sum(OTU))
 ps.top20 <- prune_taxa(top20,
                        ps.top20)
+ps.top20@tax_table@.Data
 
 plot_bar(ps.top20, 
          x = "Diet", 
@@ -488,6 +519,14 @@ plot_bar(ps.top20,
   facet_wrap( ~ Week, 
               scales = "free_x")
 
+ps.species <- ps
+top20 <- names(sort(taxa_sums(ps),
+                    decreasing = TRUE))[1:10]
+ps.top20 <- transform_sample_counts(ps,
+                                    function(OTU) OTU/sum(OTU))
+ps.top20 <- prune_taxa(top20,
+                       ps.top20)
+ps.top20@tax_table@.Data
 plot_bar(ps.top20, 
          x = "Diet", 
          fill = "Species") + 
@@ -505,5 +544,7 @@ dim(dotu)
 rownames(dotu) <- NULL
 head(dotu)
 
+t1 <- taxa_sums(ps)
+View(t1)
 #sessionInfo()
 # sink()
