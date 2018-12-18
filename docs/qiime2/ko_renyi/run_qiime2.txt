@@ -1,0 +1,99 @@
+# how to install qiime2
+# R Wu. Dec 2018
+# https://docs.qiime2.org/2018.11/tutorials/atacama-soils/
+# run on sop-1482. Working directory is /datastorage2/Renyi/16s/
+# only small files (< 1 MB) are uplaoded to Github.
+
+# 1 set wd
+cd /share/Renyi/16s
+mkdir fastq && cd fastq/
+ln -s /datastorage/FastQ_2018/16s/November/[!U]*.gz .
+ls | wc -l # 78 PE files
+
+source activate qiime2-2018.11
+
+
+# 2 import data
+Casava 1.8 paired-end demultiplexed fastq
+https://docs.qiime2.org/2018.11/tutorials/importing/
+
+# method 1. casava18
+cd ..
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path fastq \
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt \
+  --output-path casava_demux-paired-end.qza
+
+
+# Method 2. manifest
+renyi@SOP-1482:/share/Renyi/16s$ cd /
+renyi@SOP-1482:/$ ls /share/Renyi/16s/fastq/*.gz > /share/Renyi/16s/fastq_manifest.csv
+# then edit in libreoffice #Use comma not tab
+
+qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' --input-path fastq_manifest.csv --output-path manifest_paired-end-demux.qza --input-format PairedEndFastqManifestPhred33
+ 
+# 3. quality check
+qiime demux summarize --i-data casava_demux-paired-end.qza  --o-visualization casava_demux-paired-end.qzv
+
+# view the .qzv file at view.qiime2.org
+# at the second tab, 
+
+# 4. de-noise with dada2
+# 4A, casava
+qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs casava_demux-paired-end.qza \
+  --p-trim-left-f 10 \
+  --p-trim-left-r 10 \
+  --p-trunc-len-f 280 \
+  --p-trunc-len-r 280 \
+  --o-table casava_demux-paired-end_table.qza \
+  --p-n-threads 8 \
+  --o-representative-sequences casava_demux-paired-end_rep-seqs.qza \
+  --o-denoising-stats casava_demux-paired-end_denoising-stats.qza
+
+# 4B, manifest.  
+qiime dada2 denoise-paired   --i-demultiplexed-seqs manifest_paired-end-demux.qza   --p-trim-left-f 10   --p-trim-left-r 10   --p-trunc-len-f 280   --p-trunc-len-r 280   --o-table manifest_paired-end-demux_table.qza   --p-n-threads 8   --o-representative-sequences manifest_paired-end-demux_rep-seqs.qza --o-denoising-stats manifest_paired-end-demux_denoising-stats.qza
+# time consuming step
+
+
+# 5. Meta file
+cd fastq
+ls | sed -e 's/_S.*gz//' > filenames.tsv
+
+# meta file for 4A casava .qza file. The result by # 2 method 1
+casava_metadata.tsv.csv
+
+# meta file for 4B manifest .qza file. The result by # 2 method 2
+manifest_metadata.tsv.csv
+
+# 6. summarize
+# 6A for casava
+qiime feature-table summarize --i-table casava_demux-paired-end_table.qza --o-visualization casava_demux-paired-end_table.qzv --m-sample-metadata-file casava_metadata.tsv.csv 
+
+qiime feature-table tabulate-seqs --i-data casava_demux-paired-end_rep-seqs.qza --o-visualization casava_demux-paired-end_rep-seqs.qzv
+
+qiime metadata tabulate --m-input-file casava_demux-paired-end_denoising-stats.qza --o-visualization casava_demux-paired-end_denoising-stats.qzv
+
+
+# 6B for manifest. similar to 6A. 
+
+# 7. generate a tree for phylogenetic diversity analysis
+# https://docs.qiime2.org/2018.11/tutorials/moving-pictures/
+
+qiime phylogeny align-to-tree-mafft-fasttree --i-sequences casava_demux-paired-end_rep-seqs.qza --o-alignment casava_demux-paired-end_rep-seqs_aligned.qza --o-masked-alignment casava_demux-paired-end_rep-seqs_masked.qza --o-tree casava_demux-paired-end_rep-seqs_unrooted-tree.qza --o-rooted-tree casava_demux-paired-end_rep-seqs_rooted-tree.qza 
+
+# Taxonomic analysis
+# obtain the pre-trained classifier
+# wget https://data.qiime2.org/2018.11/common/gg-13-8-99-515-806-nb-classifier.qza
+renyi@SOP-1482:/datastorage2/Renyi/16s$ qiime feature-classifier classify-sklearn  --i-classifier gg-13-8-99-515-806-nb-classifier.qza --i-reads casava_demux-paired-end_rep-seqs.qza --o-classification casava_demux-paired-end_rep-seqs_taxonomy.qza
+
+# https://docs.qiime2.org/2018.11/tutorials/moving-pictures/#moving-pics-taxonomy
+renyi@SOP-1482:/datastorage2/Renyi/16s$ qiime metadata tabulate --m-input-file casava_demux-paired-end_rep-seqs_taxonomy.qza --o-visualization casava_demux-paired-end_rep-seqs_taxonomy.qzv
+# view the results on https://view.qiime2.org
+
+
+## 
+# https://docs.qiime2.org/2018.11/tutorials/fmt/#fmt-diversity
+
+

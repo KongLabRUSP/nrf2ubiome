@@ -1,0 +1,28 @@
+.
+├── casava_demux-paired-end_denoising-stats.qza
+├── casava_demux-paired-end_denoising-stats.qzv
+├── casava_demux-paired-end.qza
+├── casava_demux-paired-end.qzv
+├── casava_demux-paired-end_rep-seqs_aligned.qza
+├── casava_demux-paired-end_rep-seqs_masked.qza
+├── casava_demux-paired-end_rep-seqs.qza
+├── casava_demux-paired-end_rep-seqs.qzv
+├── casava_demux-paired-end_rep-seqs_rooted-tree.qza
+├── casava_demux-paired-end_rep-seqs_taxonomy.qza
+├── casava_demux-paired-end_rep-seqs_taxonomy.qzv
+├── casava_demux-paired-end_rep-seqs_unrooted-tree.qza
+├── casava_demux-paired-end_table.qza
+├── casava_demux-paired-end_table.qzv
+├── casava_demux-paired-end_taxa-bar-plots.qzv
+├── casava_metadata.tsv.csv
+├── fastq
+├── fastq_manifest.csv
+├── gg-13-8-99-515-806-nb-classifier.qza
+├── manifest_metadata.tsv.csv
+├── manifest_paired-end-demux_denoising-stats.qza
+├── manifest_paired-end-demux.qza
+├── manifest_paired-end-demux_rep-seqs.qza
+├── manifest_paired-end-demux_table.qza
+└── tree.txt
+
+1 directory, 24 files
