@@ -13,6 +13,9 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 12/17/2018
+* Finished verison 1; rerunning alignment with trimming
+
 ### 12/03/2018
 * Changed virtual memory size on CVI computer #3 to 64Gb (see Reference #2 below for instructions)
 
