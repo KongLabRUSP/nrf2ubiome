@@ -13,6 +13,8 @@ require(data.table)
 require(phyloseq)
 require(ggplot2)
 require(plotly)
+require(DT)
+source("source/functions.R")
 
 # Load data----
 # Counts
@@ -37,11 +39,11 @@ samples$Sample[samples$Sample %in% c("4A_S1",
                                                   "4C_S3")],
          start = 1,
          stop = 2)
-samples
+DT::datatable(samples)
 ```
 
 ### Taxonomy Ranks:
-#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**een **S**ocks
+#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
 * Kingdom                
 * Phylum                    
 * Class                   
@@ -71,9 +73,10 @@ p1 <- plot_richness(w59,
   geom_point(shape = 21,
              size = 3,
              color = "black")
-p1
+ggplotly(p1)
 ```
 
+## Relative Abundance in Samples at Different Taxonomic Ranks
 ```{r Tax, warning=FALSE,echo=FALSE,message=FALSE}
 # OTU table
 otu <- t(w59@otu_table@.Data)
@@ -325,4 +328,57 @@ p1 <- ggplot(dtr.g[order(RA,
         axis.text.x = element_text(angle = 45,
                                    hjust = 1))
 ggplotly(p1)
+```
+
+## Mean Relative Abundances
+### 1. Mean Class
+```{r MeanClass, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=10}
+t1 <- summarize_taxa(physeq = ps,
+                     Rank = "Class",
+                     GroupBy = "Diet_Week")
+p1 <- plot_taxa_summary(physeq = ps,
+                  Rank = "Class",
+                  GroupBy = "Diet_Week") +
+  ggtitle("Class")
+ggplotly(p1)
+
+```
+
+### 2. Mean Order
+```{r MeanOrder, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=12}
+t1 <- summarize_taxa(physeq = ps,
+                     Rank = "Order",
+                     GroupBy = "Diet_Week")
+p1 <- plot_taxa_summary(physeq = ps,
+                  Rank = "Order",
+                  GroupBy = "Diet_Week") +
+  ggtitle("Order")
+ggplotly(p1)
+
+```
+
+### 3. Mean Family
+```{r MeanFamily, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=15}
+t1 <- summarize_taxa(physeq = ps,
+                     Rank = "Family",
+                     GroupBy = "Diet_Week")
+p1 <- plot_taxa_summary(physeq = ps,
+                  Rank = "Family",
+                  GroupBy = "Diet_Week") +
+  ggtitle("Family")
+ggplotly(p1)
+
+```
+
+### 4. Mean Genus
+```{r MeanGenera, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=20}
+t1 <- summarize_taxa(physeq = ps,
+                     Rank = "Genus",
+                     GroupBy = "Diet_Week")
+p1 <- plot_taxa_summary(physeq = ps,
+                  Rank = "Genus",
+                  GroupBy = "Diet_Week") +
+  ggtitle("Genus")
+ggplotly(p1)
+
 ```
