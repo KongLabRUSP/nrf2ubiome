@@ -1,7 +1,7 @@
 # |----------------------------------------------------------------------------------|
-# | Project: Nrf2 BL6 PEITC 16S microbiome data simulation                           |
-# | Script: Data                                                                     |
-# | Coordinator: Rasika, Ran Yin                                                     |
+# | Project: Nrf2 BL6 PEITC 16S microbiome data analysis                             |
+# | Script: Data visualization                                                       |
+# | Coordinator: Rasika Hudlikar, Ran Yin                                            |
 # | Author: Davit Sargsyan                                                           |
 # | Created: 02/07/2019                                                              |
 # | Modified:                                                                        |
@@ -18,15 +18,15 @@ require(ggplot2)
 require(plotly)
 
 # Load data----
-# Counts
+# 1. Counts
 load("data/ps.RData")
 
-# Taxonomy
+# 2. Taxonomy
 load("data/taxa.plus.RData")
 taxa <- data.table(seq16s = rownames(taxa.plus),
                    taxa.plus)
 
-# Samples
+# 3. Samples
 # ps@sam_data
 load("data/samples.RData")
 samples$Sample <- substr(x = samples$Name,
@@ -83,6 +83,7 @@ table(dt1$Kingdom)
 dt1 <- droplevels(dt1[Kingdom == "Bacteria", ])
 
 # TAXONOMY LEVELS----
+# **K**ing **P**hillip **C**an n**O**t **F**ind **G**een **S**ocks
 # Kingdom           
 # Phylum               
 # Class              

@@ -41,4 +41,4 @@ Original files were downloaded form [here](https://www.dropbox.com/sh/5hpqzgdrgq
 ## References<a name="ref"></a>
 1. [DADA2 Pipeline Tutorial on GitHub, Benjamin Callahan](https://benjjneb.github.io/dada2/tutorial.html)
 2. [Change Window 7 virtual memory Size](https://support.lenovo.com/us/en/solutions/HT002951)
-3. [Ruggers On-Demand High Power computing](https://ondemand.hpc.rutgers.edu), run RStudio server 9specify number of cores)
+3. [Rutgers On-Demand High Power computing](https://ondemand.hpc.rutgers.edu), run RStudio server (specify number of cores)

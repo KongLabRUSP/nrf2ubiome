@@ -1,7 +1,7 @@
 # |----------------------------------------------------------------------------------|
 # | Project: Nrf2 BL6 PEITC 16S microbiome data analysis                             |
-# | Script: Data                                                                     |
-# | Coordinator: Ran Yin, Renyi Wu                                                   |
+# | Script: Data processing                                                          |
+# | Coordinator: Rasika Hudlikar, Ran Yin                                            |
 # | Author: Davit Sargsyan                                                           |
 # | Created: 11/28/2018                                                              |
 # | Modified: 12/01/2018 (DS): installed and ran DADA2 v1.10.0                       |
@@ -316,9 +316,6 @@ load("data/samples.RData")
 samples
 load("data/seqtab.nochim.RData")
 load("data/taxa.plus.RData")
-
-
-
 
 # Keep only mapped species data----
 taxa.spc <- taxa.plus[!is.na(taxa.plus)]

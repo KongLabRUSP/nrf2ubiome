@@ -41,6 +41,7 @@ samples
 ```
 
 ### Taxonomy Ranks:
+#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**een **S**ocks
 * Kingdom                
 * Phylum                    
 * Class                   
