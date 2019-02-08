@@ -6,7 +6,7 @@
 # | Created: 11/28/2018                                                              |
 # | Modified: 12/01/2018 (DS): installed and ran DADA2 v1.10.0                       |
 # |----------------------------------------------------------------------------------|
-# sink(file = "tmp/log_skin_uvb_dna_v2.txt")
+# sink(file = "tmp/log_nrf2ubiome_dada2_v1.txt")
 date()
 
 # Increase mmemory size to 64 Gb----
@@ -539,7 +539,7 @@ length(tn)
 tn[1:10]
 
 ?otu_table
-dotu <- otu_table(object = ps, taxa_are_rows = )
+dotu <- otu_table(object = ps)
 dim(dotu)
 rownames(dotu) <- NULL
 head(dotu)
