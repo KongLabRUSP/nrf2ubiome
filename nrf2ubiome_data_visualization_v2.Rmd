@@ -1,0 +1,229 @@
+---
+title: "Nrf2 BL6 PEITC 16S Microbiome Data Visualization"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+```{r Data, warning=FALSE,echo=FALSE,message=FALSE}
+# NOTE (DS, 02/09/2018): mean plots were incorrect; using new function
+require(data.table)
+require(phyloseq)
+require(ggplot2)
+require(plotly)
+require(DT)
+source("source/functions_v2.R")
+
+# Load data----
+# Counts
+load("data/ps.RData")
+
+# Taxonomy
+load("data/taxa.plus.RData")
+taxa <- data.table(seq16s = rownames(taxa.plus),
+                   taxa.plus)
+
+# Samples
+# ps@sam_data
+load("data/samples.RData")
+samples$Sample <- substr(x = samples$Name,
+                         start = 1,
+                         stop = 5)
+samples$Sample[samples$Sample %in% c("4A_S1",
+                                     "4B_S2",
+                                     "4C_S3")] <- 
+  substr(x = samples$Sample[samples$Sample %in% c("4A_S1",
+                                                  "4B_S2",
+                                                  "4C_S3")],
+         start = 1,
+         stop = 2)
+DT::datatable(samples)
+```
+
+### Taxonomy Ranks:
+#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
+* Kingdom                
+* Phylum                    
+* Class                   
+* Order                   
+* Family     
+* Genus     
+* Species  
+
+### Richness
+```{r Richness, warning=FALSE,echo=FALSE,message=FALSE}
+# Part I: keep controls and PEITCs at weeks 5 and 9 only
+# w59 <- prune_samples(samples = sample_names(ps)[!(sample_names(ps) %in%
+#                                                     c("4A",
+#                                                       "4B",
+#                                                       "4C",
+#                                                       "Undetermined"))], 
+#                     x = ps)
+w59 <- prune_samples(samples = sample_names(ps)[sample_names(ps) != "Undetermined"], 
+                    x = ps)
+
+p1 <- plot_richness(w59,
+              x = "Diet_Week", 
+              measures = "Shannon",
+              color = "Week") +
+  geom_line(aes(group = ID),
+            color = "black") +
+  geom_point(shape = 21,
+             size = 3,
+             color = "black")
+ggplotly(p1)
+```
+
+## Relative Abundance in Samples at Different Taxonomic Ranks
+```{r Tax, warning=FALSE,echo=FALSE,message=FALSE}
+# OTU table
+otu <- t(w59@otu_table@.Data)
+otu <- data.table(seq16s = rownames(otu),
+                  otu)
+
+# Merge taxonomy and counts tables----
+dt1 <- merge(taxa,
+             otu,
+             by = "seq16s")
+dt1$seq16s <- NULL
+
+# Remove archea and eucaryota----
+dt1 <- droplevels(dt1[Kingdom == "Bacteria", ])
+```
+
+### 1. Class
+```{r Class, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+tax <- "Class"
+dt2 <- counts_ra_by_tax_rank(dt1, tax)
+
+# Plot samples
+p1 <- ggplot(dt2[order(RA,
+                         decreasing = TRUE), ],
+       aes(x = Sample,
+           y = RA,
+           fill = Tax,
+           group = Diet)) +
+  facet_wrap(~ Week + Diet,
+             scales = "free_x",
+             nrow = 1) +
+  geom_bar(stat = "identity") +
+    scale_fill_discrete(tax) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r MeanClass, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=10}
+# Plot means
+ggplotly(ggplot_mean_ra(dt2, tax))
+
+# Plot means, semi-log
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+```
+
+### 2. Order
+```{r Order, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+tax <- "Order"
+dt2 <- counts_ra_by_tax_rank(dt1, tax)
+
+# Plot samples
+p1 <- ggplot(dt2[order(RA,
+                         decreasing = TRUE), ],
+       aes(x = Sample,
+           y = RA,
+           fill = Tax,
+           group = Diet)) +
+  facet_wrap(~ Week + Diet,
+             scales = "free_x",
+             nrow = 1) +
+  geom_bar(stat = "identity") +
+    scale_fill_discrete(tax) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r MeanOrder, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=12}
+# Plot means
+ggplotly(ggplot_mean_ra(dt2, tax))
+
+# Plot means, semi-log
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+```
+
+### 3. Family
+```{r Family, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+tax <- "Family"
+dt2 <- counts_ra_by_tax_rank(dt1, tax)
+
+# Plot samples
+p1 <- ggplot(dt2[order(RA,
+                         decreasing = TRUE), ],
+       aes(x = Sample,
+           y = RA,
+           fill = Tax,
+           group = Diet)) +
+  facet_wrap(~ Week + Diet,
+             scales = "free_x",
+             nrow = 1) +
+  geom_bar(stat = "identity") +
+    scale_fill_discrete(tax) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+ggplotly(p1)
+
+
+```
+
+```{r MeanFamily, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=15}
+# Plot means
+ggplotly(ggplot_mean_ra(dt2, tax))
+
+# Plot means, semi-log
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+```
+
+### 4. Genus
+```{r Genus, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+tax <- "Genus"
+dt2 <- counts_ra_by_tax_rank(dt1, tax)
+
+# Plot samples
+p1 <- ggplot(dt2[order(RA,
+                         decreasing = TRUE), ],
+       aes(x = Sample,
+           y = RA,
+           fill = Tax,
+           group = Diet)) +
+  facet_wrap(~ Week + Diet,
+             scales = "free_x",
+             nrow = 1) +
+  geom_bar(stat = "identity") +
+    scale_fill_discrete(tax) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r MeanGenera, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=20}
+# Plot means
+ggplotly(ggplot_mean_ra(dt2, tax))
+
+# Plot means, semi-log
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+```

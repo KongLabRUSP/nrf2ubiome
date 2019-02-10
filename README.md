@@ -13,6 +13,8 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 02/09/2019
+* Corrected mean plots; added weighted least squares.
 
 ### 02/07/2019
 * Added interactive plots (plotly) for relative abundances at different tax ranks
