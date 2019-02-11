@@ -52,18 +52,39 @@ counts_ra_by_tax_rank <- function(dt1, arrg_by) {
   dt2 <- merge(samples,
                dt2,
                by = "Sample")
+  
+  # Merge Class info----
+  if (arrg_by != "Class") {
+    tmp <- droplevels(unique(dt1[, c(arrg_by, 
+                                     "Class"),
+                                 with = FALSE]))
+    colnames(tmp)[1] <- "Tax"
+    dt2 <- merge(tmp,
+                 dt2,
+                 by = "Tax")
+  }
+  
   dt2$Diet <- factor(dt2$Diet)
   return(dt2)
 }
 
 # 2. Plot mean abundances
-ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE) {
+ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) {
   # Mean abundances----
   mu <- aggregate(dt2$RA,
                   by = list(Tax = dt2$Tax,
                             Week = dt2$Week,
                             Diet = dt2$Diet),
                   FUN = "mean")
+  
+  if (!is.null(facet_sex)) {
+    mu <- aggregate(dt2$RA,
+                    by = list(Tax = dt2$Tax,
+                              Week = dt2$Week,
+                              Diet = dt2$Diet,
+                              Sex = dt2$Sex),
+                    FUN = "mean")
+  }
   
   lvls <- aggregate(dt2$RA,
                     by = list(Tax = dt2$Tax),
@@ -80,11 +101,17 @@ ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE) {
     geom_point(shape = 21,
                size = 3,
                alpha = 0.5) +
+    geom_vline(xintercept = 0.01,
+               linetype = "dashed")
     scale_y_discrete(arrg_by)
   if (semi_log_x) {
     p1 <- p1 + scale_x_log10("Relative Abundance")
   } else {
     p1 <- p1 + scale_x_continuous("Relative Abundance")
+  }
+    
+  if (facet_sex) {
+    p1 <- p1 + facet_wrap(~ Sex, nrow = 1)
   }
   return(p1)
 }

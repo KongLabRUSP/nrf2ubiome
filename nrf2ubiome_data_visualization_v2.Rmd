@@ -15,6 +15,7 @@ require(phyloseq)
 require(ggplot2)
 require(plotly)
 require(DT)
+require(shiny)
 source("source/functions_v2.R")
 
 # Load data----
@@ -77,8 +78,8 @@ p1 <- plot_richness(w59,
 ggplotly(p1)
 ```
 
-## Relative Abundance in Samples at Different Taxonomic Ranks
-```{r Tax, warning=FALSE,echo=FALSE,message=FALSE}
+### Total Counts per Sample
+```{r Tax, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
 # OTU table
 otu <- t(w59@otu_table@.Data)
 otu <- data.table(seq16s = rownames(otu),
@@ -92,10 +93,29 @@ dt1$seq16s <- NULL
 
 # Remove archea and eucaryota----
 dt1 <- droplevels(dt1[Kingdom == "Bacteria", ])
+t1 <- colSums(dt1[, 8:ncol(dt1)])
+t1 <- data.table(Sample = names(t1),
+                 Total = t1)
+t1 <- merge(unique(samples[, c("Sample",
+                              "Diet",
+                              "Week")]),
+            t1,
+            by = "Sample")
+
+p1 <- ggplot(t1,
+             aes(x = Sample,
+                 y = Total,
+                 fill = Diet,
+                 colour = Week)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+ggplotly(p1)
 ```
 
+## Relative Abundance in Samples at Different Taxonomic Ranks
 ### 1. Class
-```{r Class, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+```{r Class, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
 tax <- "Class"
 dt2 <- counts_ra_by_tax_rank(dt1, tax)
 
@@ -121,14 +141,14 @@ ggplotly(p1)
 
 ```{r MeanClass, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=10}
 # Plot means
-ggplotly(ggplot_mean_ra(dt2, tax))
+ggplotly(ggplot_mean_ra(dt2, tax, facet_sex = TRUE))
 
 # Plot means, semi-log
-ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE, TRUE))
 ```
 
 ### 2. Order
-```{r Order, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+```{r Order, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
 tax <- "Order"
 dt2 <- counts_ra_by_tax_rank(dt1, tax)
 
@@ -138,6 +158,7 @@ p1 <- ggplot(dt2[order(RA,
        aes(x = Sample,
            y = RA,
            fill = Tax,
+           colour = Class,
            group = Diet)) +
   facet_wrap(~ Week + Diet,
              scales = "free_x",
@@ -154,14 +175,14 @@ ggplotly(p1)
 
 ```{r MeanOrder, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=12}
 # Plot means
-ggplotly(ggplot_mean_ra(dt2, tax))
+ggplotly(ggplot_mean_ra(dt2, tax, facet_sex = TRUE))
 
 # Plot means, semi-log
-ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE, TRUE))
 ```
 
 ### 3. Family
-```{r Family, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+```{r Family, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
 tax <- "Family"
 dt2 <- counts_ra_by_tax_rank(dt1, tax)
 
@@ -189,14 +210,14 @@ ggplotly(p1)
 
 ```{r MeanFamily, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=15}
 # Plot means
-ggplotly(ggplot_mean_ra(dt2, tax))
+ggplotly(ggplot_mean_ra(dt2, tax, facet_sex = TRUE))
 
 # Plot means, semi-log
-ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE, TRUE))
 ```
 
 ### 4. Genus
-```{r Genus, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=7}
+```{r Genus, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
 tax <- "Genus"
 dt2 <- counts_ra_by_tax_rank(dt1, tax)
 
@@ -222,8 +243,8 @@ ggplotly(p1)
 
 ```{r MeanGenera, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=20}
 # Plot means
-ggplotly(ggplot_mean_ra(dt2, tax))
+ggplotly(ggplot_mean_ra(dt2, tax, facet_sex = TRUE))
 
 # Plot means, semi-log
-ggplotly(ggplot_mean_ra(dt2, tax, TRUE))
+ggplotly(ggplot_mean_ra(dt2, tax, TRUE, TRUE))
 ```

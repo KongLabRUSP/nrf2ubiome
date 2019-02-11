@@ -13,6 +13,9 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 02/10/2019
+* Facet by sex
+
 ### 02/09/2019
 * Corrected mean plots; added weighted least squares.
 
