@@ -103,13 +103,13 @@ ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) 
                alpha = 0.5) +
     geom_vline(xintercept = 0.01,
                linetype = "dashed")
-    scale_y_discrete(arrg_by)
+  scale_y_discrete(arrg_by)
   if (semi_log_x) {
     p1 <- p1 + scale_x_log10("Relative Abundance")
   } else {
     p1 <- p1 + scale_x_continuous("Relative Abundance")
   }
-    
+  
   if (facet_sex) {
     p1 <- p1 + facet_wrap(~ Sex, nrow = 1)
   }
