@@ -68,8 +68,8 @@ counts_ra_by_tax_rank <- function(dt1, arrg_by) {
   return(dt2)
 }
 
-# 2. Plot mean abundances
-ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) {
+# 2. Mean abundance
+mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) {
   # Mean abundances----
   mu <- aggregate(dt2$RA,
                   by = list(Tax = dt2$Tax,
@@ -77,7 +77,7 @@ ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) 
                             Diet = dt2$Diet),
                   FUN = "mean")
   
-  if (!is.null(facet_sex)) {
+  if (facet_sex) {
     mu <- aggregate(dt2$RA,
                     by = list(Tax = dt2$Tax,
                               Week = dt2$Week,
@@ -92,6 +92,16 @@ ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) 
   lvls <- lvls$Tax[order(lvls$x)]
   mu$Tax <- factor(mu$Tax,
                    levels = lvls)
+  return(mu)
+}
+
+# 3. Plot mean abundances
+ggplot_mean_ra <- function(dt2, arrg_by, semi_log_x = FALSE, facet_sex = FALSE) {
+  # Mean abundances----
+  mu <- mean_ra(dt2 = dt2,
+                arrg_by = arrg_by, 
+                semi_log_x = semi_log_x, 
+                facet_sex = facet_sex)
   
   p1 <- ggplot(mu,
                aes(x = x,
