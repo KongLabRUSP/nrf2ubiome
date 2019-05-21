@@ -158,12 +158,12 @@ out <- filterAndTrim(fwd = fnFs,
                      verbose = TRUE,
                      multithread = mt) 
 head(out)
-# 4A_S1_L001_R1_001.fastq.gz       602046    454068
-# 4B_S2_L001_R1_001.fastq.gz       353067    274418
-# 4C_S3_L001_R1_001.fastq.gz       638909    527488
-# 5A1-C_S4_L001_R1_001.fastq.gz    377185    308643
-# 5A1-P_S22_L001_R1_001.fastq.gz   906226    749294
-# 5A2-C_S7_L001_R1_001.fastq.gz    430657    338116
+# 4A_S1_L001_R1_001.fastq.gz       602046    601337
+# 4B_S2_L001_R1_001.fastq.gz       353067    352732
+# 4C_S3_L001_R1_001.fastq.gz       638909    638169
+# 5A1-C_S4_L001_R1_001.fastq.gz    377185    376640
+# 5A1-P_S22_L001_R1_001.fastq.gz   906226    904995
+# 5A2-C_S7_L001_R1_001.fastq.gz    430657    430179
 
 # Learn the Error Rates
 errF <- learnErrors(filtFs, 
