@@ -1,0 +1,238 @@
+---
+title: "Nrf2 BL6 PEITC 16S Microbiome Data Visualization"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+Date: `r date()`     
+Scientist: [Ran Yin](mailto:ry147@scarletmail.rutgers.edu)      
+Sequencing (Waksman): [Dibyendu Kumar](mailto:dk@waksman.rutgers.edu)      
+Statistics: [Davit Sargsyan](mailto:sargdavid@gmail.com)      
+Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu) 
+
+```{r header}
+# sink(file = "tmp/log_nrf2ubiome_data_visualization_may2019_v1.Rmd.txt")
+# date()
+options(scipen=999)
+
+require(knitr)
+require(kableExtra)
+
+# # Increase mmemory size to 64 Gb----
+# invisible(utils::memory.limit(65536))
+options(stringsAsFactors = FALSE)
+# str(knitr::opts_chunk$get())
+# # NOTE: the below does not work!
+# knitr::opts_chunk$set(echo = FALSE, 
+#                       message = FALSE,
+#                       warning = FALSE,
+#                       error = FALSE)
+
+# On Windows set multithread=FALSE----
+mt <- TRUE
+
+require(data.table)
+require(phyloseq)
+require(ggplot2)
+require(plotly)
+# require(data.table)
+require(DT)
+require(shiny)
+source("source/functions_may2019.R")
+
+# Load data----
+# Counts
+load("data_may2019/ps_may2019.RData")
+
+# Taxonomy
+load("data_may2019/taxa.RData")
+taxa <- data.table(seq16s = rownames(taxa),
+                   taxa)
+
+# Samples
+samples <- ps_may2019@sam_data
+DT::datatable(samples,
+              options = list(pageLength = nrow(samples)))
+```
+
+### Taxonomic Ranks:
+#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
+* Kingdom                
+* Phylum                    
+* Class                   
+* Order                   
+* Family     
+* Genus     
+* Species  
+
+# Prune data
+Check mapping.
+```{r check_mapping, warning=FALSE,echo=FALSE,message=FALSE}
+table(tax_table(ps_may2019)[, "Kingdom"], 
+      exclude = NULL)
+table(tax_table(ps_may2019)[, "Phylum"], 
+      exclude = NULL)
+```
+
+First, all OTUs that were not bacteria were removed. Also, OTUs that were not mapped to a phylum were removed as these are  usually sequencing artifacts.
+```{r prune, warning=FALSE,echo=FALSE,message=FALSE}
+# 1. Keep bacteria only (i.e. remove archea and eucaryota)
+# 2. Remove if phylum is unmapped
+ps0 <- subset_taxa(ps_may2019, 
+                   Kingdom == "Bacteria" &
+                     !is.na(Phylum))
+
+table(tax_table(ps0)[, "Kingdom"], 
+      exclude = NULL)
+table(tax_table(ps0)[, "Phylum"], 
+      exclude = NULL)
+```
+
+# Richness (Alpha diversity)
+```{r richness, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
+ps0@sam_data$Diet_Week <- paste(samples$TREATMENT,
+                           samples$WEEK,
+                           sep = "_")
+ps0@sam_data$ID <- substr(x = ps0@sam_data$SAMPLE_NAME,
+                                 start = 2,
+                                 stop = 3)
+p1 <- plot_richness(ps0,
+                    x = "Diet_Week", 
+                    measures = "Shannon",
+                    color = "ID") +
+  geom_line(aes(group = ID),
+            color = "black") +
+  geom_point(shape = 21,
+             size = 3,
+             color = "black")
+ggplotly(p1)
+```
+
+# OTU table
+```{r otu_table, warning=FALSE,echo=FALSE,message=FALSE}
+otu <- data.table(ps0@tax_table@.Data,
+                  t(ps0@otu_table@.Data))
+DT::datatable(otu)
+```
+
+# Total counts per sample (i.e. sequencing depth)
+```{r Tax, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
+t1 <- colSums(otu[, 7:ncol(otu)])
+t1 <- data.table(SAMPLE_NAME = names(t1),
+                 Total = t1)
+
+tmp <- data.table(SAMPLE_NAME = samples$SAMPLE_NAME,
+                  TREATMENT = samples$TREATMENT,
+                  WEEK = samples$WEEK)
+
+t1 <- merge(tmp,
+            t1,
+            by = "SAMPLE_NAME")
+
+p1 <- ggplot(t1,
+             aes(x = SAMPLE_NAME,
+                 y = Total,
+                 fill = TREATMENT,
+                 colour = WEEK)) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("Sample Name") +
+  scale_y_continuous("Number of Reads") +
+  scale_fill_discrete("Group") +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1)) 
+ggplotly(p1)
+```
+
+# Counts at Phylum level
+```{r counts_p, warning=FALSE,echo=FALSE,message=FALSE}
+counts_p <- counts_by_tax_rank(dt1 = otu,
+                               aggr_by = "Phylum")
+DT::datatable(counts_p,
+              options = list(pageLength = nrow(counts_p)))
+```
+
+# Relative abundance (%) at Phylum level
+```{r ra_p, warning=FALSE,echo=FALSE,message=FALSE}
+ra_p <- ra_by_tax_rank(counts = counts_p)
+DT::datatable(ra_p,
+              options = list(pageLength = nrow(ra_p)))
+```
+
+Remove phyla with relative abundance of >= 1% in less than 10% of samples (i.e. prevalence >= 10%).
+
+```{r prev_p, warning=FALSE,echo=FALSE,message=FALSE}
+t1 <- data.table(Phylum = ra_p$Phylum,
+                 Prevalence = round(100*rowSums(ra_p[, 2:ncol(ra_p)] >= 1)/30, 1))
+DT::datatable(t1,
+              options = list(pageLength = nrow(ra_p)))
+```
+
+Hence, only 6 out of 13 Phyla were studied in this analysis: Actinobacteria, Bacteroidetes, Firmicutes, Proteobacteria, Tenericutes and Verrucomicrobia. Relative abundance at the next taxonomic level (Class) was, therefore, computed relative to the sum of these 6 Phyla.
+
+```{r keep_6_phyla, warning=FALSE,echo=FALSE,message=FALSE}
+keep_p <- t1$Phylum[t1$Prevalence >= 10]
+keep_p 
+ps1 <- subset_taxa(ps0, 
+                   Phylum %in% keep_p )
+otu1 <- data.table(ps1@tax_table@.Data,
+                   t(ps1@otu_table@.Data))
+DT::datatable(otu1)
+```
+
+7,628 OTUs, down from 7,764 OTUs in the previous table.
+
+
+# Relative Abundance in Samples at Different Taxonomic Ranks
+## 1. Class
+```{r counts_c, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
+counts_c <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Class")
+ra_c <- ra_by_tax_rank(counts_c)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Class")])
+
+ra_c <- merge(tax.ranks,
+              ra_c,
+              by = "Class")
+
+total <- rowSums(ra_c[, 3:ncol(ra_c)])
+
+ra_c$Class <- factor(ra_c$Class,
+                     levels = ra_c$Class[order(total)])
+
+ra_c$Phylum <- factor(ra_c$Phylum,
+                      levels = unique(ra_c$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_c,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_c),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = samples$SAMPLE_NAME,
+                        WEEK = samples$WEEK,
+                        TREATMENT = samples$TREATMENT),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Class,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+# Session Information
+```{r info,eval=TRUE}
+sessionInfo()
+```
