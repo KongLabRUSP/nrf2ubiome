@@ -13,6 +13,12 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 05/28/2019
+**Notes from the lab meeting:**       
+1. November 2018 16S FastQ data was from the Nrf2 KO mice; May 2019 batch came from WT mice.    
+2. Subtract relative abundance at baseline from all observations and analyze the differences. which timepoint had maximum separation in each model (KO and WT)?     
+3. Keep filtering for the most abundant microbes down to genus level.   
+
 ### 02/10/2019
 * Facet by sex
 

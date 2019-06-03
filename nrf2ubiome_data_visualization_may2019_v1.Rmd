@@ -11,6 +11,7 @@ Sequencing (Waksman): [Dibyendu Kumar](mailto:dk@waksman.rutgers.edu)
 Statistics: [Davit Sargsyan](mailto:sargdavid@gmail.com)      
 Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu) 
 
+# Meta data
 ```{r header}
 # sink(file = "tmp/log_nrf2ubiome_data_visualization_may2019_v1.Rmd.txt")
 # date()
@@ -56,8 +57,8 @@ DT::datatable(samples,
               options = list(pageLength = nrow(samples)))
 ```
 
-### Taxonomic Ranks:
-#### **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
+# Taxonomic Ranks:
+**K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
 * Kingdom                
 * Phylum                    
 * Class                   
@@ -232,6 +233,184 @@ p1 <- ggplot(tmp,
                                    hjust = 1))
 ggplotly(p1)
 ```
+
+```{r means_c, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_c,
+               samples = samples,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Class = lra$Class),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Class"]
+ul <- unique(mu[, c("Class", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Class <- factor(mu$Class,
+                   level = ul$Class)
+DT::datatable(mu)
+```
+
+
+```{r means_c_p0, fig.width = 10, fig.height = 5}
+p0 <- ggplot(mu,
+             aes(x = Week,
+                 y = x,
+                 group = Treatment)) +
+  facet_wrap(~ Class,
+             scale = "free_y") +
+  geom_line() +
+  geom_point(aes(shape = Treatment,
+                 color = Treatment),
+             size = 5,
+             alpha = 0.5)
+print(p0)
+```
+
+
+```{r means_c_p1, fig.width = 10, fig.height = 10}
+p1 <- ggplot(mu,
+             aes(x = x,
+                 y = Class,
+                 fill = Treatment,
+                 shape = Week)) +
+  # facet_wrap(~ Sex, nrow = 1) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)")
+ggplotly(p1)
+
+p2 <- ggplot(mu,
+             aes(x = x,
+                 y = Class,
+                 fill = Treatment,
+                 shape = Week)) +
+  # facet_wrap(~ Sex, nrow = 1) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_log10(" Log10 Scale of Relative Abundance (%)")
+
+ggplotly(p2)
+```
+
+## 2. Order
+```{r counts_o, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=6}
+counts_o <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Order")
+ra_o <- ra_by_tax_rank(counts_o)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Order")])
+
+ra_o <- merge(tax.ranks,
+              ra_o,
+              by = "Order")
+
+total <- rowSums(ra_o[, 3:ncol(ra_o)])
+
+ra_o$Order <- factor(ra_o$Order,
+                     levels = ra_o$Order[order(total)])
+
+ra_o$Phylum <- factor(ra_o$Phylum,
+                      levels = unique(ra_o$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_o,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_o),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = samples$SAMPLE_NAME,
+                        WEEK = samples$WEEK,
+                        TREATMENT = samples$TREATMENT),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Order,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+```{r means_o, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_o,
+               samples = samples,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Order = lra$Order),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Order"]
+ul <- unique(mu[, c("Order", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Order <- factor(mu$Order,
+                   level = ul$Order)
+DT::datatable(mu)
+```
+
+```{r means_o_p0, fig.width = 10, fig.height = 5}
+p0 <- ggplot(mu,
+             aes(x = Week,
+                 y = x,
+                 group = Treatment)) +
+  facet_wrap(~ Order,
+             scale = "free_y") +
+  geom_line() +
+  geom_point(aes(shape = Treatment,
+                 color = Treatment),
+             size = 5,
+             alpha = 0.5)
+print(p0)
+```
+```{r means_o_p1, fig.width = 10, fig.height = 10}
+p1 <- ggplot(mu,
+             aes(x = x,
+                 y = Order,
+                 fill = Treatment,
+                 shape = Week)) +
+  # facet_wrap(~ Sex, nrow = 1) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)")
+ggplotly(p1)
+
+p2 <- ggplot(mu,
+             aes(x = x,
+                 y = Order,
+                 fill = Treatment,
+                 shape = Week)) +
+  # facet_wrap(~ Sex, nrow = 1) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_log10(" Log10 Scale of Relative Abundance (%)")
+
+ggplotly(p2)
+```
+
 # Session Information
 ```{r info,eval=TRUE}
 sessionInfo()

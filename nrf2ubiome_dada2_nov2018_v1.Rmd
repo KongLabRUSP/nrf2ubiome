@@ -1,0 +1,424 @@
+---
+title: "Nrf2 BL6 PEITC 16S Microbiome Data Analysis\nNovember 2018 Batch"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+Date: `r date()`     
+Scientist: [Ran Yin](mailto:ry147@scarletmail.rutgers.edu)      
+Sequencing (Waksman): [Dibyendu Kumar](mailto:dk@waksman.rutgers.edu)      
+Statistics: [Davit Sargsyan](mailto:sargdavid@gmail.com)      
+Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu)      
+
+# Sources
+## Script
+This script was developed using [DADA2 Pipeline Tutorial (1.12)](https://benjjneb.github.io/dada2/tutorial.html) with tips and tricks from the [University of Maryland Shool of Medicine Institute for Genome Sciences (IGS)](http://www.igs.umaryland.edu/) [Microbiome Analysis Workshop (April 8-11, 2019)](http://www.igs.umaryland.edu/education/wkshp_metagenome.php).
+
+## Data 
+FastQ files were downloaded from [Renyi's DropBox](https://rutgers.app.box.com/s/ott485sln5bv5px5rggf0j84igigjzf5). A total of 80 files (2 per sample, pair-ended).
+
+## Linux terminal commands
+```{}
+# Reset working directory to root
+cd
+
+# Navigate to folder where FastQ files will be stored
+cd nrf2ubiome/fastq_nov2018/
+
+# Download a zip folder with all files
+# curl -L https://rutgers.app.box.com/s/ott485sln5bv5px5rggf0j84igigjzf5 > download.zip
+# Copy the whole folder from my machine
+# 16s_2018.zip
+
+# Unzip into the filder
+unzip 16s_2018.zip
+
+# Remove the zip file
+rm 16s_2018.zip
+
+# NOTE: the files unzipped into a subfolder; 
+# move them one folder up to fastq_nov2018 and delete the subfolder!
+```
+
+**NOTE**: the file ***sample_name_16s_may_2019_Kong_Ran_Davit.csv*** was created by Ran and contains additional information about samples, hence, a more complete metadata file. It is based on the files downloaded above. 
+
+# Load libraries
+```{r header}
+# sink(file = "tmp/log_nrf2ubiome_dada2_v2.txt")
+# date()
+
+require(knitr)
+require(kableExtra)
+
+# # Increase mmemory size to 64 Gb----
+# invisible(utils::memory.limit(65536))
+options(stringsAsFactors = FALSE)
+# str(knitr::opts_chunk$get())
+# # NOTE: the below does not work!
+# knitr::opts_chunk$set(echo = FALSE, 
+#                       message = FALSE,
+#                       warning = FALSE,
+#                       error = FALSE)
+
+# On Windows set multithread=FALSE----
+mt <- TRUE
+
+# # Source: https://benjjneb.github.io/dada2/index.html
+# # Installed on J&J Rstudio server  on 05/22/2019
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install(version = "3.8")
+# BiocManager::install("dada2", version = "3.8")
+# BiocManager::install("phyloseq", version = "3.8")
+
+# Follow the tutorial:
+# https://benjjneb.github.io/dada2/tutorial.html
+
+require(data.table)
+require(dada2)
+require(phyloseq)
+require(ggplot2)
+library(stringr)
+require(DT)
+```
+
+# Meta data
+```{r meta_data,warnings=FALSE,echo=FALSE,message=FALSE}
+path <- "fastq_may2019"
+
+# Create sample description table----
+# Source: /docs/legends_16s_11-28-2018.xlsx
+dt.meta <- data.table(Name = list.files(path = path,
+                                        pattern = ".gz"))
+dt.meta$Name <- gsub(pattern = "_L001_R1_001.fastq.gz",
+                     replacement = "",
+                     x = dt.meta$Name)
+dt.meta$Name <- gsub(pattern = "_L001_R2_001.fastq.gz",
+                     replacement = "",
+                     x = dt.meta$Name)
+dt.meta <- unique(dt.meta)
+
+dt.meta$WEEK <- factor(substr(dt.meta$Name, 1, 1))
+dt.meta$Cage <- factor(substr(dt.meta$Name, 2, 2))
+dt.meta$Sex <- "NA"
+dt.meta$Sex[dt.meta$Cage %in% c("A", "B")] <- "Male"
+dt.meta$Sex[dt.meta$Cage =="C"] <- "Female"
+dt.meta$Sex <- factor(dt.meta$Sex)
+dt.meta$TREATMENT <- factor(substr(dt.meta$Name, 5, 5),
+                       levels = c("C", 
+                                  "P"),
+                       labels = c("AIN93M Control",
+                                  "PEITC"))
+dt.meta$MouseNum <- factor(as.numeric(substr(dt.meta$Name, 3, 3)))
+dt.meta$ID <- paste(dt.meta$TREATMENT,
+                    dt.meta$Cage,
+                    dt.meta$MouseNum,
+                    sep = "_")
+dt.meta$TREATMENT_WEEK <- paste(dt.meta$TREATMENT,
+                           dt.meta$WEEK,
+                           sep = "_")
+
+dt.meta <- data.frame(dt.meta)
+save(dt.meta,
+     file = "data_nov2018/dt.meta.RData")
+
+DT::datatable(dt.meta,
+              options = list(pageLength = nrow(dt.meta)),
+              rownames = FALSE)
+```
+
+# Questions
+1. Did microbiome change over time?      
+2. Was microbiome affected by diet?    
+
+# FastQ files
+```{r fastq,warnings=FALSE,echo=FALSE,message=FALSE}
+# Get FastQ file names----
+list.files(path = path,
+           pattern = ".gz")
+```
+
+# Quality of reads
+In **gray-scale** is a heat map of the frequency of each quality score at each base position. The median quality score at each position is shown by the **green** line, and the quartiles of the quality score distribution by the **orange** lines. The **red** line shows the scaled proportion of reads that extend to at least that position (this is more useful for other sequencing technologies, as Illumina reads are typically all the same lenghth, hence the flat red line).      
+Source: [DADA2 Pipeline Tutorial (1.12)](https://benjjneb.github.io/dada2/tutorial.html) 
+**NOTE**: the reason the quality seems to be low at the beginning is that the program is using moving averages so there are less data points in the beginning. No trimming is needed on the left.
+
+## Forward reads
+```{r plot_quality_fwd,warnings=FALSE,echo=FALSE,message=FALSE,fig.height=4,fig.width=5}
+fnFs <- sort(list.files(path, 
+                        pattern="_R1_001.fastq", 
+                        full.names = TRUE))
+system.time({
+  for (i in 1:length(fnFs)) {
+    print(plotQualityProfile(fnFs[i]))
+  }
+})
+```
+
+## Reverse reads
+```{r plot_quality_rev,warnings=FALSE,echo=FALSE,message=FALSE,fig.height=4,fig.width=5}
+fnRs <- sort(list.files(path,
+                        pattern="_R2_001.fastq",
+                        full.names = TRUE))
+system.time({
+  for (i in 1:length(fnRs)) {
+    print(plotQualityProfile(fnRs[i]))
+  }
+})
+```
+
+# Filter and trim sequences
+The reads were trimmed approximately to the lenght at which the quality score median (the **green** line) went below 20.    
+The forward reads were of a very good quiality. Only last 20 bases were trimmed.    
+THe reverse read were of lower quality and were trimmed at the length of 220 bases.
+```{r sort_n_trim,warnings=FALSE,echo=FALSE,message=FALSE}
+sample.names <- gsub(x = fnFs,
+                     pattern = "fastq_may2019/",
+                     replacement = "")
+sample.names <- sapply(strsplit(sample.names, "_"),
+                       `[`, 
+                       1)
+sample.names
+
+filtFs <- gsub(x = fnFs,
+               pattern = "fastq_may2019/",
+               replacement = "filtered_may2019/")
+
+filtRs <- gsub(x = fnRs,
+               pattern = "fastq_may2019/",
+               replacement = "filtered_may2019/")
+
+system.time({
+  out <- filterAndTrim(fwd = fnFs, 
+                       filt = filtFs,
+                       rev = fnRs, 
+                       filt.rev = filtRs, 
+                       truncLen = c(280,220),
+                       maxN = 0, 
+                       maxEE = c(2,2), 
+                       truncQ = 2, 
+                       rm.phix = TRUE, 
+                       compress = TRUE,
+                       multithread = mt)
+})
+save(out,
+     file = "data_may2019/out.RData")
+gc()
+```
+
+# Reads after trimming: examples
+```{r trim_rev,warnings=FALSE,echo=FALSE,message=FALSE}
+plotQualityProfile(filtFs[1])
+plotQualityProfile(filtRs[1])
+```
+
+# Learn the error rates
+**NOTE**: parameter learning is computationally intensive, so by default the learnErrors function uses only a subset of the data (the first 1M reads). If the plotted error model does not look like a good fit, try increasing the nreads parameter to see if the fit improves.
+```{r learn_error,warnings=FALSE,echo=FALSE,message=FALSE}
+system.time(errF <- learnErrors(filtFs, 
+                                multithread = mt))
+save(errF,
+     file = "data_may2019/errF.RData")
+
+system.time(errR <- learnErrors(filtRs, 
+                                multithread = mt))
+save(errR,
+     file = "data_may2019/errR.RData")
+```
+
+# Plot learn the error rates
+```{r plot_error,warnings=FALSE,echo=FALSE,message=FALSE}
+plotErrors(errF, 
+           nominalQ = TRUE)
+plotErrors(errR, 
+           nominalQ = TRUE)
+```
+
+# Dereplicate the dataset 
+**NOTE**: for larger datasets (exceeding available RAM) process samples one-by-one. See [DADA2 Workflow on Big Data](https://benjjneb.github.io/dada2/bigdata.html).
+```{r dereplicate,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+system.time(derepFs <- derepFastq(filtFs, 
+                                  verbose=TRUE))
+save(derepFs,
+     file = "data_may2019/derepFs.RData")
+
+system.time(derepRs <- derepFastq(filtRs, 
+                                  verbose=TRUE))
+save(derepRs,
+     file = "data_may2019/derepRs.RData")
+
+head(derepFs)
+head(derepRs)
+```
+
+# Alignment
+**Notes from IGS Workshop***:    
+Sample Inference - inferring the sequence variants in each sample.     
+      
+By default, the ***dada*** function processes each sample independently, but pooled processing is available with ***pool=TRUE*** and that may give better results for low sampling depths at the cost of increased computation time.     
+     
+All samples are simultaneously loaded into memory by default. If the datasets approach or exceed available RAM, it is preferable to process samples one-by-one in a streaming fashion: see [DADA2 Workflow on Big Data](https://benjjneb.github.io/dada2/bigdata.html) for an example.    
+```{r dada,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+# load("data_may2019/errF.RData")
+# load("data_may2019/errR.RData")
+# load("data_may2019/derepFs.RData")
+# load("data_may2019/derepRs.RData")
+
+system.time(dadaFs <- dada(derep = derepFs, 
+                           err = errF,
+                           multithread = mt))
+save(dadaFs,
+     file = "data_may2019/dadaFs.RData")
+
+system.time(dadaRs <- dada(derep = derepRs, 
+                           err = errR,
+                           multithread = mt))
+save(dadaRs,
+     file = "data_may2019/dadaRs.RData")
+```
+
+# Merge paired reads
+```{r merge,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+system.time(mergers <- mergePairs(dadaF = dadaFs,
+                                  derepF = derepFs,
+                                  dadaR = dadaRs, 
+                                  derepR = derepRs,
+                                  verbose = TRUE))
+save(mergers,
+     file = "data_may2019/mergers.RData")
+```
+
+# Make a sequence table for chimera removal
+```{r chimera,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+system.time(seqtab <- makeSequenceTable(mergers))
+
+dim(seqtab)
+save(seqtab,
+     file = "data_may2019/seqtab.RData")
+
+# Remove chimeras
+system.time(seqtab.nochim <- removeBimeraDenovo(unqs = seqtab,
+                                                method = "consensus",
+                                                multithread = mt,
+                                                verbose = TRUE))
+
+dim(seqtab.nochim) 
+save(seqtab.nochim,
+     file = "data_may2019/seqtab.nochim.RData")
+write.csv(seqtab.nochim, 
+          file = "data_may2019/seqtab.nochim.csv", 
+          quote = FALSE)
+
+# 1 - proportion of chimeras
+print(paste("Chimeras = ",
+            round(100*(1 - (sum(seqtab.nochim)/sum(seqtab))), 1),
+            "%",
+            sep = ""))
+```
+
+**NOTE**: According to the IGS, denovo chimeras are determined based on most abundant sequencins in a given data. Usually 5-7% of sequences are chimeras. It is much higher in this dataset (> 40%). IGS recommends revisiting the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification. 
+
+## Number of reads per sample throughout processing
+```{r check_length}
+getN <- function(x) {
+  sum(getUniques(x))
+} 
+track <- cbind(out, 
+               sapply(dadaFs, 
+                      getN),
+               sapply(mergers,
+                      getN),
+               rowSums(seqtab), 
+               rowSums(seqtab.nochim))
+colnames(track) <- c("Raw", 
+                     "Filtered",
+                     "Denoised", 
+                     "Merged",
+                     "Tabled",
+                     "Non-Chimeras")
+rownames(track) <- sample.names
+DT::datatable(format(track,
+                     big.mark = ","),
+              options = list(pageLength = nrow(track)))
+```
+
+IGS suggests the number of **merged** sequences can potentially be increased by truncating the reads less (***truncLen*** parameter in the ***filterAndTrim*** function), specifically, making sure that the truncated reads span the amplicon. This might not be the case here as the remaining reads are relatively long (280 bases for forward and 220 reads for reverse reads).
+
+# Save amplicon sequence variants (ASV) as a FastA file
+Write out and save your results thus far: 
+```{r save_fasta_asv}
+fc <- file("data_may2019/all_runs_dada2_ASV.fasta")
+fltp <- character()
+for( i in 1:ncol(seqtab)) {
+  fltp <- append(fltp, 
+                 paste0(">Seq_", 
+                        i))
+  fltp <- append(fltp,
+                 colnames(seqtab)[i])
+}
+writeLines(fltp, 
+           fc)
+close(fc)
+head(fltp)
+rm(fltp)
+gc()
+```
+
+# Assign taxonomy
+**NOTE**: create ***taxa.RData*** once, then comment it out and load the R data file to when reruning the code. 
+```{r tax_assign}
+# taxa <- assignTaxonomy(seqs = seqtab.nochim,
+#                        refFasta = "tax/silva_nr_v132_train_set.fa",
+#                        multithread = mt)
+# save(taxa,
+#      file = "data_may2019/taxa.RData")
+
+load("data_may2019/taxa.RData")
+print(paste("Number of unique references =",
+            format(nrow(taxa),
+                   big.mark = ",")))
+
+DT::datatable(taxa[1:5, ],
+              rownames = FALSE)
+
+# Keep only the references found in the data
+taxa.tmp <- taxa[rownames(taxa) %in% colnames(seqtab.nochim), ]
+print(paste("Number of references matched in the data =",
+            format(nrow(taxa.tmp),
+                   big.mark = ",")))
+
+# # Add species (do it once)
+# taxa.plus <- addSpecies(taxtab = taxa.tmp,
+#                         refFasta = "tax/silva_species_assignment_v132.fa",
+#                         verbose = TRUE)
+# save(taxa.plus,
+#      file = "data_may2019/taxa.plus.RData")
+
+load("data_may2019/taxa.plus.RData")
+```
+
+```{r phyloseq}
+dt.otu <- otu_table(seqtab.nochim, 
+                    taxa_are_rows = FALSE)
+sample_names(dt.otu) <- sample.names
+print("Sample names in OTU table")
+sample_names(dt.otu)
+
+metadata <- sample_data(dt.meta)
+rownames(metadata) <- metadata$SAMPLE_NAME
+print("Sample names in metadata")
+sample_names(metadata)
+
+ps_may2019 <- phyloseq(dt.otu, 
+                       metadata,
+                       tax_table(taxa))
+# sample_names(ps_may2019)
+save(ps_may2019,
+     file = "data_may2019/ps_may2019.RData")
+```
+
+# Session Information
+```{r info,eval=TRUE}
+sessionInfo()
+```
