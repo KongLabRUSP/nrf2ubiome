@@ -4,6 +4,8 @@ output:
   html_notebook:
     toc: yes
     toc_float: yes
+    number_sections: yes
+    code_folding: hide
 ---
 Date: `r date()`     
 Scientist: [Ran Yin](mailto:ry147@scarletmail.rutgers.edu)      
@@ -12,17 +14,14 @@ Statistics: [Davit Sargsyan](mailto:sargdavid@gmail.com)
 Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu) 
 
 # Meta data
-```{r header}
-# sink(file = "tmp/log_nrf2ubiome_data_visualization_may2019_v1.Rmd.txt")
-# date()
-options(scipen=999)
-
-require(knitr)
-require(kableExtra)
+```{r setup}
+options(stringsAsFactors = FALSE,
+        scipen = 999)
 
 # # Increase mmemory size to 64 Gb----
 # invisible(utils::memory.limit(65536))
-options(stringsAsFactors = FALSE)
+
+
 # str(knitr::opts_chunk$get())
 # # NOTE: the below does not work!
 # knitr::opts_chunk$set(echo = FALSE, 
@@ -30,18 +29,22 @@ options(stringsAsFactors = FALSE)
 #                       warning = FALSE,
 #                       error = FALSE)
 
-# On Windows set multithread=FALSE----
-mt <- TRUE
-
+require(knitr)
+require(kableExtra)
 require(data.table)
 require(phyloseq)
 require(ggplot2)
 require(plotly)
-# require(data.table)
 require(DT)
 require(shiny)
+
 source("source/functions_may2019.R")
 
+# On Windows set multithread=FALSE----
+mt <- TRUE
+```
+
+```{r data}
 # Load data----
 # Counts
 load("data_may2019/ps_may2019.RData")
@@ -53,68 +56,154 @@ taxa <- data.table(seq16s = rownames(taxa),
 
 # Samples
 samples <- ps_may2019@sam_data
-DT::datatable(samples,
+datatable(samples,
               options = list(pageLength = nrow(samples)))
 ```
 
+```{}
 # Taxonomic Ranks:
-**K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
-* Kingdom                
-* Phylum                    
-* Class                   
-* Order                   
-* Family     
-* Genus     
-* Species  
-
-# Prune data
-Check mapping.
-```{r check_mapping, warning=FALSE,echo=FALSE,message=FALSE}
-table(tax_table(ps_may2019)[, "Kingdom"], 
-      exclude = NULL)
-table(tax_table(ps_may2019)[, "Phylum"], 
-      exclude = NULL)
+# **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
+# * Kingdom                
+# * Phylum                    
+# * Class                   
+# * Order                   
+# * Family     
+# * Genus     
+# * Species  
 ```
 
-First, all OTUs that were not bacteria were removed. Also, OTUs that were not mapped to a phylum were removed as these are  usually sequencing artifacts.
-```{r prune, warning=FALSE,echo=FALSE,message=FALSE}
+# Prune data
+Keep only bacterial OTUs.  
+```{r check_mapping_kingdom, warning = FALSE, echo = FALSE, message = FALSE}
+t1 <- data.table(table(tax_table(ps_may2019)[,
+                                             "Kingdom"],
+                       exclude = NULL))
+t1$V1[is.na(t1$V1)] <- "Unknown"
+
+t1[, pct := N/sum(N)]
+setorder(t1, -N)
+
+colnames(t1) <- c("Kingdom",
+                  "Number of OTUs",
+                  "Percent of OTUs")
+datatable(t1,
+          rownames = FALSE,
+          caption = "Number of OTUs by Kingdom",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t1))) %>%
+  formatCurrency(columns = 2,
+                 currency = "",
+                 mark = ",",
+                 digits = 0) %>%
+  formatPercentage(columns = 3,
+                   digits = 2)
+```
+
+Check bacterial distribution by phylum.
+```{r check_mapping_phylum, warning = FALSE, echo = FALSE, message = FALSE}
+t2 <- data.table(table(tax_table(ps_may2019)[,
+                                             "Phylum"],
+                                  exclude = NULL))
+t2$V1[is.na(t2$V1)] <- "Unknown"
+setorder(t2, -N)
+t2[, pct := N/sum(N)]
+setorder(t2, -N)
+
+colnames(t2) <- c("Phylum",
+                  "Number of OTUs",
+                  "Percent of OTUs")
+
+datatable(t2,
+          rownames = FALSE,
+          caption = "Number of Bacterial OTUs by Phylum",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t2))) %>%
+  formatCurrency(columns = 2,
+                 currency = "",
+                 mark = ",",
+                 digits = 0) %>%
+  formatPercentage(columns = 3,
+                   digits = 2)
+```
+
+First, all OTUs that were not bacteria were removed. Also, OTUs that were not mapped to a phylum were removed as these are  usually sequencing artifacts. 
+
+```{r prune, warning = FALSE, echo = FALSE, message = FALSE}
 # 1. Keep bacteria only (i.e. remove archea and eucaryota)
 # 2. Remove if phylum is unmapped
 ps0 <- subset_taxa(ps_may2019, 
                    Kingdom == "Bacteria" &
                      !is.na(Phylum))
 
-table(tax_table(ps0)[, "Kingdom"], 
-      exclude = NULL)
-table(tax_table(ps0)[, "Phylum"], 
-      exclude = NULL)
+t2 <- data.table(table(tax_table(ps0)[,
+                                      "Phylum"],
+                                  exclude = NULL))
+t2$V1[is.na(t2$V1)] <- "Unknown"
+setorder(t2, -N)
+t2[, pct := N/sum(N)]
+setorder(t2, -N)
+
+colnames(t2) <- c("Phylum",
+                  "Number of OTUs",
+                  "Percent of OTUs")
+
+datatable(t2,
+          rownames = FALSE,
+          caption = "Number of Bacterial OTUs by Phylum",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t2))) %>%
+  formatCurrency(columns = 2,
+                 currency = "",
+                 mark = ",",
+                 digits = 0) %>%
+  formatPercentage(columns = 3,
+                   digits = 2)
 ```
 
 # Richness (Alpha diversity)
-```{r richness, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
+```{r richness, fig.width = 10,fig.height = 5}
 ps0@sam_data$Diet_Week <- paste(samples$TREATMENT,
-                           samples$WEEK,
-                           sep = "_")
+                                samples$WEEK,
+                                sep = "_")
 ps0@sam_data$ID <- substr(x = ps0@sam_data$SAMPLE_NAME,
-                                 start = 2,
-                                 stop = 3)
+                          start = 2,
+                          stop = 3)
 p1 <- plot_richness(ps0,
                     x = "Diet_Week", 
-                    measures = "Shannon",
-                    color = "ID") +
+                    measures = "Shannon") +
+  geom_point(aes(fill = ID),
+             shape = 21,
+             size = 3,
+             color = "black") +
   geom_line(aes(group = ID),
             color = "black") +
-  geom_point(shape = 21,
-             size = 3,
-             color = "black")
-ggplotly(p1)
+  scale_x_discrete("") +
+  theme(axis.text.x = element_text(angle = 45))
+
+
+
+ggplotly(p = p1,
+         tooltip = c("ID",
+                     "value"))
 ```
 
-# OTU table
+# OTU table (first 10 rows)
 ```{r otu_table, warning=FALSE,echo=FALSE,message=FALSE}
 otu <- data.table(ps0@tax_table@.Data,
                   t(ps0@otu_table@.Data))
-DT::datatable(otu)
+datatable(head(otu, 10),
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10)) %>%
+  formatCurrency(columns = 7:36,
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
 ```
 
 # Total counts per sample (i.e. sequencing depth)
@@ -140,7 +229,7 @@ p1 <- ggplot(t1,
   scale_x_discrete("Sample Name") +
   scale_y_continuous("Number of Reads") +
   scale_fill_discrete("Group") +
-  theme(axis.text.x = element_text(angle = 90,
+  theme(axis.text.x = element_text(angle = 45,
                                    hjust = 1)) 
 ggplotly(p1)
 ```
@@ -149,36 +238,74 @@ ggplotly(p1)
 ```{r counts_p, warning=FALSE,echo=FALSE,message=FALSE}
 counts_p <- counts_by_tax_rank(dt1 = otu,
                                aggr_by = "Phylum")
-DT::datatable(counts_p,
-              options = list(pageLength = nrow(counts_p)))
+setorder(counts_p, -`0A1`)
+datatable(counts_p,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(counts_p))) %>%
+  formatCurrency(columns = 2:ncol(counts_p),
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
 ```
 
 # Relative abundance (%) at Phylum level
 ```{r ra_p, warning=FALSE,echo=FALSE,message=FALSE}
-ra_p <- ra_by_tax_rank(counts = counts_p)
-DT::datatable(ra_p,
-              options = list(pageLength = nrow(ra_p)))
+ra_p <- ra_by_tax_rank(counts = counts_p,
+                       pct = FALSE,
+                       digit = 4)
+
+datatable(ra_p,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(ra_p))) %>%
+  formatPercentage(columns = 2:ncol(counts_p),
+                   digits = 2)
 ```
 
-Remove phyla with relative abundance of >= 1% in less than 10% of samples (i.e. prevalence >= 10%).
+Remove phyla with relative abundance of >= 1% in less than 10% of samples.
 
-```{r prev_p, warning=FALSE,echo=FALSE,message=FALSE}
+```{r prev_p}
 t1 <- data.table(Phylum = ra_p$Phylum,
-                 Prevalence = round(100*rowSums(ra_p[, 2:ncol(ra_p)] >= 1)/30, 1))
-DT::datatable(t1,
-              options = list(pageLength = nrow(ra_p)))
+                 `Number of Samples` = rowSums(ra_p[, 2:ncol(ra_p)] >= 0.01))
+t1$`Percent Samples` <-  t1$`Number of Samples`/30
+
+setorder(t1, -`Number of Samples`)
+datatable(t1,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t1))) %>%
+  formatPercentage(columns = 3,
+                   digits = 1)
 ```
 
 Hence, only 6 out of 13 Phyla were studied in this analysis: Actinobacteria, Bacteroidetes, Firmicutes, Proteobacteria, Tenericutes and Verrucomicrobia. Relative abundance at the next taxonomic level (Class) was, therefore, computed relative to the sum of these 6 Phyla.
 
 ```{r keep_6_phyla, warning=FALSE,echo=FALSE,message=FALSE}
-keep_p <- t1$Phylum[t1$Prevalence >= 10]
-keep_p 
+keep_p <- t1$Phylum[t1$`Percent Samples` >= 0.1]
+paste0(keep_p, collapse = ", ")
+
 ps1 <- subset_taxa(ps0, 
                    Phylum %in% keep_p )
 otu1 <- data.table(ps1@tax_table@.Data,
                    t(ps1@otu_table@.Data))
-DT::datatable(otu1)
+
+datatable(head(otu1, 10),
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10)) %>%
+  formatCurrency(columns = 7:ncol(otu1),
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
 ```
 
 7,628 OTUs, down from 7,764 OTUs in the previous table.
@@ -251,7 +378,15 @@ ul <- unique(mu[, c("Class",
 ul <- ul[order(total),]
 mu$Class <- factor(mu$Class,
                    level = ul$Class)
-DT::datatable(mu)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(mu),
+                         order = list(list(3, 'desc'))))
 ```
 
 
@@ -260,13 +395,14 @@ p0 <- ggplot(mu,
              aes(x = Week,
                  y = x,
                  group = Treatment)) +
-  facet_wrap(~ Class,
+  facet_wrap(~ rev(Class),
              scale = "free_y") +
   geom_line() +
   geom_point(aes(shape = Treatment,
                  color = Treatment),
              size = 5,
-             alpha = 0.5)
+             alpha = 0.5) +
+  scale_y_continuous("Relative abundance (%)")
 print(p0)
 ```
 
@@ -284,20 +420,6 @@ p1 <- ggplot(mu,
              linetype = "dashed") +
   scale_x_continuous("Relative Abundance (%)")
 ggplotly(p1)
-
-p2 <- ggplot(mu,
-             aes(x = x,
-                 y = Class,
-                 fill = Treatment,
-                 shape = Week)) +
-  # facet_wrap(~ Sex, nrow = 1) +
-  geom_point(size = 3,
-             alpha = 0.5) +
-  geom_vline(xintercept = 1,
-             linetype = "dashed") +
-  scale_x_log10(" Log10 Scale of Relative Abundance (%)")
-
-ggplotly(p2)
 ```
 
 ## 2. Order
@@ -348,6 +470,7 @@ p1 <- ggplot(tmp,
                                    hjust = 1))
 ggplotly(p1)
 ```
+
 ```{r means_o, echo = FALSE, warning = FALSE, message = FALSE}
 lra <- ra_melt(ra = ra_o,
                samples = samples,
@@ -365,7 +488,15 @@ ul <- unique(mu[, c("Order",
 ul <- ul[order(total),]
 mu$Order <- factor(mu$Order,
                    level = ul$Order)
-DT::datatable(mu)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(mu),
+                         order = list(list(3, 'desc'))))
 ```
 
 ```{r means_o_p0, fig.width = 10, fig.height = 5}
@@ -382,6 +513,7 @@ p0 <- ggplot(mu,
              alpha = 0.5)
 print(p0)
 ```
+
 ```{r means_o_p1, fig.width = 10, fig.height = 10}
 p1 <- ggplot(mu,
              aes(x = x,
@@ -395,20 +527,6 @@ p1 <- ggplot(mu,
              linetype = "dashed") +
   scale_x_continuous("Relative Abundance (%)")
 ggplotly(p1)
-
-p2 <- ggplot(mu,
-             aes(x = x,
-                 y = Order,
-                 fill = Treatment,
-                 shape = Week)) +
-  # facet_wrap(~ Sex, nrow = 1) +
-  geom_point(size = 3,
-             alpha = 0.5) +
-  geom_vline(xintercept = 1,
-             linetype = "dashed") +
-  scale_x_log10(" Log10 Scale of Relative Abundance (%)")
-
-ggplotly(p2)
 ```
 
 # Session Information
