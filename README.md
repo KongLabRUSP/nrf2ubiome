@@ -13,6 +13,9 @@
 [References](#ref)   
 
 ## Daily Logs<a name="logs"></a>
+### 10/25/2019
+* New data received: WT + Nrf2 KO (-/-) treated with PEITC or canberry. New script for data processing: 
+
 ### 05/28/2019
 **Notes from the lab meeting:**       
 1. November 2018 16S FastQ data was from the Nrf2 KO mice; May 2019 batch came from WT mice.    
