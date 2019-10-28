@@ -14,7 +14,7 @@ Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu)
 # Sources
 ## Script
 This script was developed using [DADA2 Pipeline Tutorial (1.12)](https://benjjneb.github.io/dada2/tutorial.html) with tips and tricks from the [University of Maryland Shool of Medicine Institute for Genome Sciences (IGS)](http://www.igs.umaryland.edu/) [Microbiome Analysis Workshop (April 8-11, 2019)](http://www.igs.umaryland.edu/education/wkshp_metagenome.php).
-
+  
 ## Data 
 FastQ files were downloaded from [this Rutgers Box location](https://rutgers.app.box.com/folder/90143462291). A total of 72 files (2 per sample, pair-ended) and a pair of undetermined reads were downloaded.  
   
@@ -25,7 +25,7 @@ FastQ files were downloaded from [this Rutgers Box location](https://rutgers.app
 require(knitr)
 require(kableExtra)
 
-# # Increase memory size to 64 Gb----
+# # Increase memory size to 64 Gb
 # invisible(utils::memory.limit(65536))
 options(stringsAsFactors = FALSE)
 # str(knitr::opts_chunk$get())
@@ -35,8 +35,9 @@ options(stringsAsFactors = FALSE)
 #                       warning = FALSE,
 #                       error = FALSE)
 
-# On Windows set multithread=FALSE----
-mt <- TRUE
+# On Windows set multithread=FALSE
+# Otherwise, TRUE or number of cores
+mt <- 30
 
 # # Source: https://benjjneb.github.io/dada2/index.html
 # # Installed on J&J Rstudio server  on 05/22/2019
@@ -117,7 +118,7 @@ system.time({
 # Filter and trim sequences
 The reads were trimmed approximately to the lenght at which the quality score median (the **green** line) went below 20.    
 The forward reads were of a very good quiality. Only last 10 bases were trimmed.    
-THe reverse read were of lower quality and were trimmed at the length of 220 bases.  
+The reverse read were of lower quality and were trimmed at the length of 220 bases.  
   
 ```{r sort_n_trim}
 sample.names <- gsub(x = fnFs,
@@ -137,11 +138,12 @@ filtRs <- gsub(x = fnRs,
                replacement = "filtered_sep2019/")
 
 system.time({
-  out <- filterAndTrim(fwd = fnFs, 
-                       filt = filtFs,
-                       rev = fnRs, 
-                       filt.rev = filtRs, 
-                       truncLen = c(290,220),
+  out <- filterAndTrim(fwd = fnFs[1:71], 
+                       filt = filtFs[1:71],
+                       rev = fnRs[1:71], 
+                       filt.rev = filtRs[1:71], 
+                       truncLen = c(280,220),
+                       # trimRight = c(20, 80),
                        maxN = 0, 
                        maxEE = c(2,2), 
                        truncQ = 2, 
@@ -233,7 +235,7 @@ system.time(mergers <- mergePairs(dadaF = dadaFs,
                                   derepR = derepRs,
                                   verbose = TRUE))
 save(mergers,
-     file = "data_may2019/mergers.RData")
+     file = "data_sep2019/mergers.RData")
 ```
 
 # Make a sequence table for chimera removal
@@ -242,7 +244,7 @@ system.time(seqtab <- makeSequenceTable(mergers))
 
 dim(seqtab)
 save(seqtab,
-     file = "data_may2019/seqtab.RData")
+     file = "data_sep2019/seqtab.RData")
 
 # Remove chimeras
 system.time(seqtab.nochim <- removeBimeraDenovo(unqs = seqtab,
@@ -264,10 +266,12 @@ print(paste("Chimeras = ",
             sep = ""))
 ```
 
-**NOTE**: According to the IGS, denovo chimeras are determined based on most abundant sequencins in a given data. Usually 5-7% of sequences are chimeras. It is much higher in this dataset (> 40%). IGS recommends revisiting the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification. 
+**NOTE**: According to the IGS, denovo chimeras are determined based on most abundant sequencins in a given data. Usually 5-7% of sequences are chimeras. It is much higher in this dataset (60.2%). IGS recommends revisiting the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification. 
 
 ## Number of reads per sample throughout processing
 ```{r check_length}
+load("data_sep2019/out.RData")
+
 getN <- function(x) {
   sum(getUniques(x))
 } 
@@ -285,9 +289,9 @@ colnames(track) <- c("Raw",
                      "Tabled",
                      "Non-Chimeras")
 rownames(track) <- sample.names
-DT::datatable(format(track,
-                     big.mark = ","),
-              options = list(pageLength = nrow(track)))
+datatable(format(track,
+                 big.mark = ","),
+          options = list(pageLength = nrow(track)))
 ```
 
 IGS suggests the number of **merged** sequences can potentially be increased by truncating the reads less (***truncLen*** parameter in the ***filterAndTrim*** function), specifically, making sure that the truncated reads span the amplicon. This might not be the case here as the remaining reads are relatively long (280 bases for forward and 220 reads for reverse reads).
@@ -295,7 +299,7 @@ IGS suggests the number of **merged** sequences can potentially be increased by 
 # Save amplicon sequence variants (ASV) as a FastA file
 Write out and save your results thus far: 
 ```{r save_fasta_asv}
-fc <- file("data_may2019/all_runs_dada2_ASV.fasta")
+fc <- file("data_sep2019/all_runs_dada2_ASV.fasta")
 fltp <- character()
 for( i in 1:ncol(seqtab)) {
   fltp <- append(fltp, 
@@ -319,15 +323,15 @@ gc()
 #                        refFasta = "tax/silva_nr_v132_train_set.fa",
 #                        multithread = mt)
 # save(taxa,
-#      file = "data_may2019/taxa.RData")
+#      file = "data_sep2019/taxa.RData")
 
-load("data_may2019/taxa.RData")
+load("data_sep2019/taxa.RData")
 print(paste("Number of unique references =",
             format(nrow(taxa),
                    big.mark = ",")))
 
-DT::datatable(taxa[1:5, ],
-              rownames = FALSE)
+datatable(taxa[1:5, ],
+          rownames = FALSE)
 
 # Keep only the references found in the data
 taxa.tmp <- taxa[rownames(taxa) %in% colnames(seqtab.nochim), ]
@@ -341,8 +345,8 @@ print(paste("Number of references matched in the data =",
 #                         verbose = TRUE)
 # save(taxa.plus,
 #      file = "data_may2019/taxa.plus.RData")
-
-load("data_may2019/taxa.plus.RData")
+# 
+# load("data_sep2019/taxa.plus.RData")
 ```
 
 ```{r phyloseq}
@@ -357,12 +361,14 @@ rownames(metadata) <- metadata$SAMPLE_NAME
 print("Sample names in metadata")
 sample_names(metadata)
 
-ps_may2019 <- phyloseq(dt.otu, 
+metadata@row.names <- sample_names(dt.otu)
+
+ps_sep2019 <- phyloseq(dt.otu, 
                        metadata,
                        tax_table(taxa))
-# sample_names(ps_may2019)
-save(ps_may2019,
-     file = "data_may2019/ps_may2019.RData")
+sample_names(ps_sep2019)
+save(ps_sep2019,
+     file = "data_sep2019/ps_sep2019.RData")
 ```
 
 # Session Information
