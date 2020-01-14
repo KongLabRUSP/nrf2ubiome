@@ -16,7 +16,7 @@ Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu)
 This script was developed using [DADA2 Pipeline Tutorial (1.12)](https://benjjneb.github.io/dada2/tutorial.html) with tips and tricks from the [University of Maryland Shool of Medicine Institute for Genome Sciences (IGS)](http://www.igs.umaryland.edu/) [Microbiome Analysis Workshop (April 8-11, 2019)](http://www.igs.umaryland.edu/education/wkshp_metagenome.php).
   
 ## Data 
-FastQ files were downloaded from [this Rutgers Box location](https://rutgers.app.box.com/folder/90143462291). A total of 72 files (2 per sample, pair-ended) and a pair of undetermined reads were downloaded.  
+FastQ files were downloaded from [this Rutgers Box location](https://rutgers.app.box.com/folder/90143462291). A total of 144 files (2 per sample, pair-ended) and a pair of undetermined reads were downloaded.  
   
 ***16s metadata Sep-2019.xlsx*** meta-data file was created by Ran. It was saved as .CSV file and used by this script.  
   
@@ -37,7 +37,8 @@ options(stringsAsFactors = FALSE)
 
 # On Windows set multithread=FALSE
 # Otherwise, TRUE or number of cores
-mt <- 30
+# mt <- 30
+mt <- TRUE
 
 # # Source: https://benjjneb.github.io/dada2/index.html
 # # Installed on J&J Rstudio server  on 05/22/2019
@@ -56,6 +57,8 @@ require(phyloseq)
 require(ggplot2)
 library(stringr)
 require(DT)
+
+path <- "fastq_sep2019"
 ```
 
 # Meta-data
@@ -81,7 +84,6 @@ datatable(dt.meta,
 # FastQ files
 ```{r fastq}
 # Get FastQ file names----
-path <- "fastq_sep2019"
 list.files(path = path,
            pattern = ".gz")
 ```
@@ -137,20 +139,20 @@ filtRs <- gsub(x = fnRs,
                pattern = "fastq_sep2019/",
                replacement = "filtered_sep2019/")
 
-system.time({
-  out <- filterAndTrim(fwd = fnFs[1:71], 
-                       filt = filtFs[1:71],
-                       rev = fnRs[1:71], 
-                       filt.rev = filtRs[1:71], 
-                       truncLen = c(280,220),
-                       # trimRight = c(20, 80),
-                       maxN = 0, 
-                       maxEE = c(2,2), 
-                       truncQ = 2, 
-                       rm.phix = TRUE, 
-                       compress = TRUE,
-                       multithread = mt)
-})
+out <- filterAndTrim(fwd = fnFs, 
+                     filt = filtFs,
+                     rev = fnRs, 
+                     filt.rev = filtRs, 
+                     truncLen = c(280, 220),
+                     # trimRight = c(20, 80),
+                     maxN = 0, 
+                     maxEE = c(2, 2), 
+                     truncQ = 2, 
+                     rm.phix = TRUE, 
+                     compress = TRUE,
+                     multithread = FALSE)
+# NOTE: multi-tread messes up pairs of the files; using single tread instead.
+
 save(out,
      file = "data_sep2019/out.RData")
 gc()
@@ -164,14 +166,30 @@ plotQualityProfile(filtRs[1])
 
 # Learn the error rates
 **NOTE**: parameter learning is computationally intensive, so by default the learnErrors function uses only a subset of the data (the first 1M reads). If the plotted error model does not look like a good fit, try increasing the nreads parameter to see if the fit improves.
-```{r learn_error,warnings=FALSE,echo=FALSE,message=FALSE}
+```{r learn_error_fs}
+# fnFs <- sort(list.files(path,
+#                         pattern="_R1_001.fastq",
+#                         full.names = TRUE))
+# filtFs <- gsub(x = fnFs,
+#                pattern = "fastq_sep2019/",
+#                replacement = "filtered_sep2019/")
+
 system.time(errF <- learnErrors(filtFs, 
-                                multithread = mt))
+                                multithread = FALSE))
 save(errF,
      file = "data_sep2019/errF.RData")
+```
+
+```{r learn_error_rs}
+# fnRs <- sort(list.files(path,
+#                         pattern="_R2_001.fastq",
+#                         full.names = TRUE))
+# filtRs <- gsub(x = fnRs,
+#                pattern = "fastq_sep2019/",
+#                replacement = "filtered_sep2019/")
 
 system.time(errR <- learnErrors(filtRs, 
-                                multithread = mt))
+                                multithread = FALSE))
 save(errR,
      file = "data_sep2019/errR.RData")
 ```
@@ -186,19 +204,38 @@ plotErrors(errR,
 
 # Dereplicate the dataset 
 **NOTE**: for larger datasets (exceeding available RAM) process samples one-by-one. See [DADA2 Workflow on Big Data](https://benjjneb.github.io/dada2/bigdata.html).
-```{r dereplicate,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+```{r dereplicate_fs}
+# fnFs <- sort(list.files(path, 
+#                         pattern="_R1_001.fastq", 
+#                         full.names = TRUE))
+# filtFs <- gsub(x = fnFs,
+#                pattern = "fastq_sep2019/",
+#                replacement = "filtered_sep2019/")
+
 system.time(derepFs <- derepFastq(filtFs, 
-                                  verbose=TRUE))
+                                  verbose = TRUE))
 save(derepFs,
      file = "data_sep2019/derepFs.RData")
 
+head(derepFs)
+gc()
+```
+
+```{r dereplicate_rs}
+# fnRs <- sort(list.files(path,
+#                         pattern="_R2_001.fastq",
+#                         full.names = TRUE))
+# filtRs <- gsub(x = fnRs,
+#                pattern = "fastq_sep2019/",
+#                replacement = "filtered_sep2019/")
+
 system.time(derepRs <- derepFastq(filtRs, 
-                                  verbose=TRUE))
+                                  verbose = TRUE))
 save(derepRs,
      file = "data_sep2019/derepRs.RData")
 
-head(derepFs)
 head(derepRs)
+gc()
 ```
 
 # Alignment
@@ -208,27 +245,35 @@ Sample Inference - inferring the sequence variants in each sample.
 By default, the ***dada*** function processes each sample independently, but pooled processing is available with ***pool=TRUE*** and that may give better results for low sampling depths at the cost of increased computation time.     
      
 All samples are simultaneously loaded into memory by default. If the datasets approach or exceed available RAM, it is preferable to process samples one-by-one in a streaming fashion: see [DADA2 Workflow on Big Data](https://benjjneb.github.io/dada2/bigdata.html) for an example.    
-```{r dada,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
-# load("data_may2019/errF.RData")
-# load("data_may2019/errR.RData")
-# load("data_may2019/derepFs.RData")
-# load("data_may2019/derepRs.RData")
+```{r dada_fs}
+# load("data_sep2019/errF.RData")
+# load("data_sep2019/derepFs.RData")
 
 system.time(dadaFs <- dada(derep = derepFs, 
                            err = errF,
-                           multithread = mt))
+                           multithread = TRUE))
 save(dadaFs,
      file = "data_sep2019/dadaFs.RData")
+```
+
+```{r dada_rs}
+# load("data_sep2019/errR.RData")
+# load("data_sep2019/derepRs.RData")
 
 system.time(dadaRs <- dada(derep = derepRs, 
                            err = errR,
-                           multithread = mt))
+                           multithread = TRUE))
 save(dadaRs,
      file = "data_sep2019/dadaRs.RData")
 ```
 
 # Merge paired reads
 ```{r merge,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+# load("data_sep2019/dadaFs.RData")
+# load("data_sep2019/derepFs.RData")
+# load("data_sep2019/dadaRs.RData")
+# load("data_sep2019/derepRs.RData")
+
 system.time(mergers <- mergePairs(dadaF = dadaFs,
                                   derepF = derepFs,
                                   dadaR = dadaRs, 
@@ -240,11 +285,14 @@ save(mergers,
 
 # Make a sequence table for chimera removal
 ```{r chimera,warnings=FALSE,echo=FALSE,message=FALSE,eval=TRUE}
+# load("data_sep2019/mergers.RData")
+
 system.time(seqtab <- makeSequenceTable(mergers))
 
 dim(seqtab)
 save(seqtab,
      file = "data_sep2019/seqtab.RData")
+gc()
 
 # Remove chimeras
 system.time(seqtab.nochim <- removeBimeraDenovo(unqs = seqtab,
@@ -266,11 +314,22 @@ print(paste("Chimeras = ",
             sep = ""))
 ```
 
-**NOTE**: According to the IGS, denovo chimeras are determined based on most abundant sequencins in a given data. Usually 5-7% of sequences are chimeras. It is much higher in this dataset (60.2%). IGS recommends revisiting the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification. 
+**NOTE**: According to the IGS, denovo chimeras are determined based on most abundant sequencins in a given data. Usually 5-7% of sequences are chimeras. It is much higher in this dataset (60.4%). IGS recommends revisiting the removal of primers, as the ambiguous nucleotides in unremoved primers interfere with chimera identification. 
 
 ## Number of reads per sample throughout processing
 ```{r check_length}
-load("data_sep2019/out.RData")
+# load("data_sep2019/out.RData")
+# load("data_sep2019/dadaFs.RData")
+# fnFs <- sort(list.files(path,
+#                         pattern="_R1_001.fastq",
+#                         full.names = TRUE))
+# sample.names <- gsub(x = fnFs,
+#                      pattern = "fastq_sep2019/",
+#                      replacement = "")
+# sample.names <- sapply(strsplit(sample.names, "_"),
+#                        `[`, 
+#                        1)
+# sample.names
 
 getN <- function(x) {
   sum(getUniques(x))
@@ -350,6 +409,7 @@ print(paste("Number of references matched in the data =",
 ```
 
 ```{r phyloseq}
+load("data_sep2019/dt.meta.RData")
 dt.otu <- otu_table(seqtab.nochim, 
                     taxa_are_rows = FALSE)
 sample_names(dt.otu) <- sample.names

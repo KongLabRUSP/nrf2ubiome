@@ -1,0 +1,980 @@
+---
+title: "Data Visualization of WT and Nrf2 KO (-/-) BL6 PEITC or Cranberry Treated Mice 16S Microbiome Data Analysis, September 2019 Batch"
+output: 
+  html_notebook:
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+Date: `r date()`     
+Scientist: [Ran Yin](mailto:ry147@scarletmail.rutgers.edu)      
+Sequencing (Waksman): [Dibyendu Kumar](mailto:dk@waksman.rutgers.edu)      
+Statistics: [Davit Sargsyan](mailto:sargdavid@gmail.com)      
+Principal Investigator: [Ah-Ng Kong](mailto:kongt@pharmacy.rutgers.edu) 
+
+```{}
+# Taxonomic Ranks:
+# **K**ing **P**hillip **C**an n**O**t **F**ind **G**reen **S**ocks
+# * Kingdom                
+# * Phylum                    
+# * Class                   
+# * Order                   
+# * Family     
+# * Genus     
+# * Species  
+```
+
+```{r setup}
+# options(stringsAsFactors = FALSE,
+#         scipen = 999)
+
+# # Increase mmemory size to 64 Gb----
+# invisible(utils::memory.limit(65536))
+
+
+# str(knitr::opts_chunk$get())
+# # NOTE: the below does not work!
+# knitr::opts_chunk$set(echo = FALSE, 
+#                       message = FALSE,
+#                       warning = FALSE,
+#                       error = FALSE)
+
+# require(knitr)
+# require(kableExtra)
+require(phyloseq)
+# require(shiny)
+
+require(data.table)
+require(ggplot2)
+require(plotly)
+require(DT)
+require(lmerTest)
+
+source("source/functions_may2019.R")
+
+# On Windows set multithread=FALSE----
+mt <- TRUE
+```
+
+# Introduction
+C57BL/6 wild-type (WT) and Nrf-2 double-knock-out (KO -/-) mice were given 2-week microbiome stabilization process using AIN93M diet and 8 more weeks to treat with either AIN93M or AIN93M 5% PEITC diet. Fecal samples were collected weekly, immediately frozen in liquid nitrogen and stored at -80^o^C. Serum, cecal, colon epithelial and whole colon tissues at week 10 were also collected for further analyses. Baseline, week 1 and 4 fecal samples were selected for 16s rRNA sequencing.  
+  
+This document examines results from the WT mice samples.  
+  
+We will attampt to answer the following questions:  
+1. Did microbiome change over time?  
+2. Was microbiome affected by diet?  
+3. Was there a difference between the KO and WT?  
+4. If there was a change in microbiome composition, what functional changes did it carry? What are the essential functions of the bacteria affected by the treatment and how can this be shown in vivo (metabolites, inflammation markers, etc.)?
+
+# Data preprocessing
+## Raw Data 
+FastQ files were downloaded from [this Rutgers Box location](https://rutgers.app.box.com/folder/90143462291). A total of 144 files (2 per sample, pair-ended) and a pair of undetermined reads were downloaded. 
+
+## Script
+This script (***nrf2ubiome_dada2_sep2019_v1.Rmd***) was developed using [DADA2 Pipeline Tutorial (1.12)](https://benjjneb.github.io/dada2/tutorial.html) with tips and tricks from the [University of Maryland Shool of Medicine Institute for Genome Sciences (IGS)](http://www.igs.umaryland.edu/) [Microbiome Analysis Workshop (April 8-11, 2019)](http://www.igs.umaryland.edu/education/wkshp_metagenome.php). The output of the DADA2 script (***data_may2019/ps_sep2019.RData***) is explored in this document.
+
+# Meta data: sample description
+```{r data}
+# Load data----
+# Counts
+load("data_sep2019/ps_sep2019.RData")
+
+# Taxonomy
+load("data_sep2019/taxa.RData")
+taxa <- data.table(seq16s = rownames(taxa),
+                   taxa)
+```
+
+**NOTE: correction to the meta-data!** (11/15/2019)
+```{r correct_meta_data}
+correct_samples <- fread("data_sep2019/16s metadata Sep-2019.csv")
+ps_sep2019@sam_data$DSS <- correct_samples$DSS
+```
+
+# Samples
+```{r samples}
+ps_sep2019@sam_data$Genotype_Week <- paste(ps_sep2019@sam_data$genotype,
+                                           ps_sep2019@sam_data$time,
+                                           sep = "_")
+ps_sep2019@sam_data$ID <- factor(paste0(ps_sep2019@sam_data$mice_num,
+                                        ps_sep2019@sam_data$cage))
+
+ps_sep2019@sam_data$TREATMENT <- paste0(ps_sep2019@sam_data$DSS,
+                                        ps_sep2019@sam_data$PEITC,
+                                        ps_sep2019@sam_data$cranberry)
+ps_sep2019@sam_data$TREATMENT <- factor(ps_sep2019@sam_data$TREATMENT,
+                                        levels = c("000",
+                                                   "100",
+                                                   "110",
+                                                   "101"),
+                                        labels = c("Naive",
+                                                   "DSS",
+                                                   "DSS+PEITC",
+                                                   "DSS+Cranberry"))
+
+samples <- ps_sep2019@sam_data
+datatable(samples,
+          options = list(pageLength = nrow(samples)))
+```
+
+# Prune data
+The OTUs were mapped to Bacteria (96.07%), Eukaryota (2.95%) and Archea (0.03%) kingdoms, and  75 OTUs (0.95%) undefined. 
+
+```{r check_mapping_kingdom, warning = FALSE, echo = FALSE, message = FALSE}
+t1 <- data.table(table(tax_table(ps_sep2019)[, "Kingdom"],
+                       exclude = NULL))
+t1$V1[is.na(t1$V1)] <- "Unknown"
+
+t1[, pct := N/sum(N)]
+setorder(t1, -N)
+
+colnames(t1) <- c("Kingdom",
+                  "Number of OTUs",
+                  "Percent of OTUs")
+datatable(t1,
+          rownames = FALSE,
+          caption = "Number of OTUs by Kingdom",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t1))) %>%
+  formatCurrency(columns = 2,
+                 currency = "",
+                 mark = ",",
+                 digits = 0) %>%
+  formatPercentage(columns = 3,
+                   digits = 2)
+```
+
+The total of 7,867 unique sequences were found. Out of those, 7,558 were mapped to bacterial genomes. 
+
+```{r keep_bacteria}
+dim(ps_sep2019@otu_table@.Data)
+
+# Remove OTU not mapped to Bacteria
+ps0 <- subset_taxa(ps_sep2019, 
+                   Kingdom == "Bacteria")
+dim(ps0@otu_table@.Data)
+```
+  
+These 7,247 belonged to 12 Phyla. 311 of the OTUs (or 4.11% of bacterial OTUs) could not be mapped to a Phyla.
+
+```{r phylum_mapping}
+t2 <- data.table(table(tax_table(ps0)[, "Phylum"],
+                                  exclude = NULL))
+t2$V1[is.na(t2$V1)] <- "Unknown"
+setorder(t2, -N)
+t2[, pct := N/sum(N)]
+setorder(t2, -N)
+
+colnames(t2) <- c("Phylum",
+                  "Number of OTUs",
+                  "Percent of OTUs")
+
+datatable(t2,
+          rownames = FALSE,
+          caption = "Number of Bacterial OTUs by Phylum",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t2))) %>%
+  formatCurrency(columns = 2,
+                 currency = "",
+                 mark = ",",
+                 digits = 0) %>%
+  formatPercentage(columns = 3,
+                   digits = 2)
+```
+
+# OTU table (first 10 rows)
+```{r otu_table, warning=FALSE,echo=FALSE,message=FALSE}
+otu <- data.table(ps0@tax_table@.Data,
+                  t(ps0@otu_table@.Data))
+datatable(head(otu, 10),
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10)) %>%
+  formatCurrency(columns = 7:36,
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
+```
+
+# Total counts per sample (i.e. sequencing depth)
+```{r seq_depth, fig.width = 10,fig.height = 5}
+t1 <- colSums(otu[, 7:ncol(otu)])
+t1 <- data.table(SAMPLE_NAME = names(t1),
+                 Total = t1)
+
+t2 <- data.table(SAMPLE_NAME = rownames(samples),
+                 ID = samples$ID,
+                 CAGE = samples$cage,
+                 TREATMENT = samples$TREATMENT,
+                 Genotype = samples$genotype,
+                 WEEK = samples$time)
+
+smpl <- merge(t1,
+              t2,
+              by = "SAMPLE_NAME")
+
+p1 <- ggplot(smpl,
+             aes(x = SAMPLE_NAME,
+                 y = Total,
+                 fill = TREATMENT,
+                 colour = WEEK)) +
+  facet_wrap(~ Genotype,
+             scale = "free_x") +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous("Number of Reads") +
+  scale_fill_discrete("Treatment") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1)) 
+ggplotly(p1)
+```
+
+# Richness (Alpha diversity)
+Shannon's diversity index was calculated for each sample and ploted over time using the 7,764 from the 13 Phylum above.
+
+```{r richness, fig.width = 10,fig.height = 5}
+p1 <- plot_richness(ps0,
+                    x = "time", 
+                    measures = "Shannon") +
+  facet_wrap(~ genotype) +
+  geom_line(aes(group = ID),
+            color = "black") +
+  geom_point(aes(fill = TREATMENT),
+             shape = 21,
+             size = 3,
+             color = "black") +
+  scale_x_discrete("") +
+  theme(axis.text.x = element_text(angle = 30,
+                                   hjust = 1,
+                                   vjust = 1))
+
+ggplotly(p = p1,
+         tooltip = c("ID",
+                     "value"))
+
+p1 <- p1 + 
+  scale_fill_discrete("") +
+  theme(legend.position = "top")
+
+tiff(filename = "tmp/shannon.tiff",
+     height = 4,
+     width = 5,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+```
+
+Test if the richness changed between the baseline and the week 8.
+```{r lm_richness}
+tmp <- data.table(SAMPLE_NAME = p1$data$samples,
+                  Shannon = p1$data$value)
+
+tmp <- merge(smpl,
+              tmp,
+              by = "SAMPLE_NAME")
+
+tmp$TREATMENT <- factor(tmp$TREATMENT,
+                        levels = c("DSS",
+                                   "Naive",
+                                   "DSS+PEITC",
+                                   "DSS+Cranberry"))
+
+tmp <- droplevels(tmp[WEEK != "week1"])
+
+m1 <- lm(Shannon  ~ WEEK*(TREATMENT + Genotype),
+         # offset = Total,
+         data = tmp)
+summary(m1)
+```
+
+```{r lmer_richness}
+m2 <- lmer(Shannon  ~ WEEK*(TREATMENT + Genotype) + (1 | ID),
+           # offset = Total,
+           data = tmp)
+summary(m2)
+```
+  
+The results showed that...
+  
+# Remove unmapped OTUs
+The 311 unmapped OTUs were removed from further analysis (with 7,247 OTUs left).
+```{r remove_unmapped_otu_phylum}
+ps1 <- subset_taxa(ps0, 
+                   !is.na(Phylum))
+dim(ps1@otu_table@.Data)
+```
+
+# Counts at Phylum level
+```{r counts_p, warning=FALSE,echo=FALSE,message=FALSE}
+counts_p <- counts_by_tax_rank(dt1 = otu,
+                               aggr_by = "Phylum")
+setorder(counts_p, -`190919-01`)
+datatable(counts_p,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(counts_p))) %>%
+  formatCurrency(columns = 2:ncol(counts_p),
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
+```
+
+# Relative abundance (%) at Phylum level
+```{r ra_p, warning=FALSE,echo=FALSE,message=FALSE}
+ra_p <- ra_by_tax_rank(counts = counts_p,
+                       pct = FALSE,
+                       digit = 4)
+
+datatable(ra_p,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(ra_p))) %>%
+  formatPercentage(columns = 2:ncol(counts_p),
+                   digits = 2)
+```
+
+Remove phyla with relative abundance of >= 1% in less than 10% of samples.
+
+```{r prev_p}
+t1 <- data.table(Phylum = ra_p$Phylum,
+                 `Number of Samples` = rowSums(ra_p[, 2:ncol(ra_p)] >= 0.01))
+t1$`Percent Samples` <-  t1$`Number of Samples`/72
+
+setorder(t1, -`Number of Samples`)
+datatable(t1,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = nrow(t1))) %>%
+  formatPercentage(columns = 3,
+                   digits = 1)
+```
+
+We will remove Chlamydiae from this analysis.
+
+```{r keep_6_phyla, warning=FALSE,echo=FALSE,message=FALSE}
+keep_p <- t1$Phylum[t1$`Percent Samples` >= 0.1]
+# # Keep all
+# keep_p <- t1$Phylum
+
+paste0(keep_p, collapse = ", ")
+
+ps1 <- subset_taxa(ps0, 
+                   Phylum %in% keep_p )
+otu1 <- data.table(ps1@tax_table@.Data,
+                   t(ps1@otu_table@.Data))
+
+datatable(head(otu1, 10),
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10)) %>%
+  formatCurrency(columns = 7:ncol(otu1),
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
+```
+
+XX OTUs, down from YY OTUs in the previous table.
+
+
+# Relative Abundance in Samples at Different Taxonomic Ranks
+## 1. Class
+```{r counts_c, warning=FALSE,echo=FALSE,message=FALSE,fig.width=15,fig.height=15}
+counts_c <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Class")
+ra_c <- ra_by_tax_rank(counts_c)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Class")])
+
+ra_c <- merge(tax.ranks,
+              ra_c,
+              by = "Class")
+
+total <- rowSums(ra_c[, 3:ncol(ra_c)])
+
+ra_c$Class <- factor(ra_c$Class,
+                     levels = ra_c$Class[order(total)])
+
+ra_c$Phylum <- factor(ra_c$Phylum,
+                      levels = unique(ra_c$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_c,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_c),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = smpl$SAMPLE_NAME,
+                        WEEK = smpl$WEEK,
+                        TREATMENT = smpl$TREATMENT,
+                        Genotype = smpl$Genotype),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Class,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT + Genotype,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r means_c, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_c,
+               samples = smpl,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Genotype = lra$Genotype,
+                                     Class = lra$Class),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Class"]
+ul <- unique(mu[, c("Class", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Class <- factor(mu$Class,
+                   level = ul$Class)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10,
+                         order = list(list(3, 'desc')))) %>%
+  formatCurrency(columns = 5,
+                 currency = "",
+                 mark = ",",
+                 digits = 2)
+```
+
+
+```{r means_c_p0, fig.width = 9, fig.height = 7}
+mu$Trt_Genotype <- factor(paste(mu$Treatment,
+                          mu$Genotype,
+                          sep = "_"))
+
+p0 <- ggplot(mu,
+             aes(x = Week,
+                 y = x,
+                 group = Trt_Genotype)) +
+  facet_wrap(~ Class,
+             scale = "free_y") +
+  geom_line(position = position_dodge(0.3)) +
+  geom_point(aes(fill = Trt_Genotype),
+             shape = 21,
+             size = 2,
+             alpha = 0.5,
+             position = position_dodge(0.3)) +
+  scale_x_discrete("") +
+  scale_y_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+
+tiff(filename = "tmp/wt_class_over_time.tiff",
+     height = 5,
+     width = 7,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p0)
+graphics.off()
+
+print(p0)
+```
+
+
+```{r means_c_p1, fig.height = 5, fig.width = 9}
+p1 <- ggplot(mu,
+             aes(x = x,
+                 y = Class,
+                 color = Trt_Genotype,
+                 shape = Week)) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top")
+
+tiff(filename = "tmp/wt_class_ra.tiff",
+     height = 4,
+     width = 7,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+ggplotly(p1)
+```
+
+## 2. Order
+```{r counts_o, warning=FALSE,echo=FALSE,message=FALSE,fig.width=15,fig.height=15}
+counts_o <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Order")
+ra_o <- ra_by_tax_rank(counts_o)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Order")])
+
+ra_o <- merge(tax.ranks,
+              ra_o,
+              by = "Order")
+
+total <- rowSums(ra_o[, 3:ncol(ra_o)])
+
+ra_o$Order <- factor(ra_o$Order,
+                     levels = ra_o$Order[order(total)])
+
+ra_o$Phylum <- factor(ra_o$Phylum,
+                      levels = unique(ra_o$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_o,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_o),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = smpl$SAMPLE_NAME,
+                        WEEK = smpl$WEEK,
+                        TREATMENT = smpl$TREATMENT,
+                        Genotype = smpl$Genotype),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Order,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT + Genotype,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r means_o, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_o,
+               samples = smpl,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Genotype = lra$Genotype,
+                                     Order = lra$Order),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Order"]
+ul <- unique(mu[, c("Order", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Order <- factor(mu$Order,
+                   level = ul$Order)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10,
+                         order = list(list(3, 'desc')))) %>%
+  formatCurrency(columns = 5,
+                 currency = "",
+                 mark = ",",
+                 digits = 2)
+```
+
+```{r means_o_p0, fig.width = 9, fig.height = 7}
+mu$Trt_Genotype <- factor(paste(mu$Treatment,
+                                mu$Genotype,
+                                sep = "_"))
+
+p0 <- ggplot(mu,
+             aes(x = Week,
+                 y = x,
+                 group = Trt_Genotype)) +
+  facet_wrap(~ Order,
+             scale = "free_y") +
+  geom_line(position = position_dodge(0.3)) +
+  geom_point(aes(fill = Trt_Genotype),
+             shape = 21,
+             size = 2,
+             alpha = 0.5,
+             position = position_dodge(0.3)) +
+  scale_x_discrete("") +
+  scale_y_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+
+tiff(filename = "tmp/wt_Order_over_time.tiff",
+     height = 5,
+     width = 7,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p0)
+graphics.off()
+
+print(p0)
+```
+
+```{r means_o_p1, fig.height = 5, fig.width = 9}
+p1 <- ggplot(mu,
+             aes(x = x,
+                 y = Order,
+                 color = Trt_Genotype,
+                 shape = Week)) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top")
+
+tiff(filename = "tmp/wt_Order_ra.tiff",
+     height = 4,
+     width = 7,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+ggplotly(p1)
+```
+
+## 3. Family
+```{r counts_f, warning=FALSE,echo=FALSE,message=FALSE,fig.width=15,fig.height=15}
+counts_f <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Family")
+ra_f <- ra_by_tax_rank(counts_f)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Family")])
+
+ra_f <- merge(tax.ranks,
+              ra_f,
+              by = "Family")
+
+total <- rowSums(ra_f[, 3:ncol(ra_f)])
+
+ra_f$Family <- factor(ra_f$Family,
+                     levels = ra_f$Family[order(total)])
+
+ra_f$Phylum <- factor(ra_f$Phylum,
+                      levels = unique(ra_f$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_f,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_f),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = smpl$SAMPLE_NAME,
+                        WEEK = smpl$WEEK,
+                        TREATMENT = smpl$TREATMENT,
+                        Genotype = smpl$Genotype),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Family,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT + Genotype,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+```{r means_f, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_f,
+               samples = smpl,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Genotype = lra$Genotype,
+                                     Family = lra$Family),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Family"]
+ul <- unique(mu[, c("Family", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Family <- factor(mu$Family,
+                   level = ul$Family)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10,
+                         Family = list(list(3, 'desc')))) %>%
+  formatCurrency(columns = 5,
+                 currency = "",
+                 mark = ",",
+                 digits = 2)
+```
+
+NOTE: only the first 24 families had large enough counts - ploting only them.  
+  
+```{r means_f_p0, fig.width = 9, fig.height = 7}
+mu$Trt_Genotype <- factor(paste(mu$Treatment,
+                                mu$Genotype,
+                                sep = "_"))
+mu1 <- droplevels(mu[Family %in% levels(mu$Family)[nlevels(mu$Family):(nlevels(mu$Family) - 24)], ])
+
+p0 <- ggplot(mu1,
+             aes(x = Week,
+                 y = x,
+                 group = Trt_Genotype)) +
+  facet_wrap(~ Family,
+             scale = "free_y") +
+  geom_line(position = position_dodge(0.3)) +
+  geom_point(aes(fill = Trt_Genotype),
+             shape = 21,
+             size = 2,
+             alpha = 0.5,
+             position = position_dodge(0.3)) +
+  scale_x_discrete("") +
+  scale_y_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+
+tiff(filename = "tmp/wt_Family_over_time.tiff",
+     height = 7,
+     width = 9,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p0)
+graphics.off()
+
+print(p0)
+```
+
+```{r means_f_p1, fig.height = 5, fig.width = 9}
+p1 <- ggplot(mu1,
+             aes(x = x,
+                 y = Family,
+                 color = Trt_Genotype,
+                 shape = Week)) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top")
+
+tiff(filename = "tmp/wt_Family_ra.tiff",
+     height = 4,
+     width = 7,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+ggplotly(p1)
+```
+
+## 4. Genus
+```{r counts_g, warning=FALSE,echo=FALSE,message=FALSE,fig.width=15,fig.height=15}
+counts_g <- counts_by_tax_rank(dt1 = otu1,
+                               aggr_by = "Genus")
+ra_g <- ra_by_tax_rank(counts_g)
+
+tax.ranks <- unique(otu1[, c("Phylum",
+                             "Genus")])
+
+ra_g <- merge(tax.ranks,
+              ra_g,
+              by = "Genus")
+
+total <- rowSums(ra_g[, 3:ncol(ra_g)])
+
+ra_g$Genus <- factor(ra_g$Genus,
+                     levels = ra_g$Genus[order(total)])
+
+ra_g$Phylum <- factor(ra_g$Phylum,
+                      levels = unique(ra_g$Phylum[order(total)]))
+tmp <- melt.data.table(data = ra_g,
+                       id.vars = 1:2,
+                       measure.vars = 3:ncol(counts_g),
+                       variable.name = "SAMPLE_NAME",
+                       value.name = "RA")
+
+tmp <- merge(data.table(SAMPLE_NAME = smpl$SAMPLE_NAME,
+                        WEEK = smpl$WEEK,
+                        TREATMENT = smpl$TREATMENT,
+                        Genotype = smpl$Genotype),
+             tmp,
+             by = "SAMPLE_NAME")
+
+# Plot samples
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = RA,
+                 fill = Genus,
+                 color = Phylum)) +
+  facet_wrap(~ WEEK + TREATMENT + Genotype,
+             scales = "free_x",
+             nrow = 3) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("") +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme(axis.text.x = element_text(angle = 0,
+                                   hjust = 1))
+ggplotly(p1)
+```
+
+
+```{r means_g, echo = FALSE, warning = FALSE, message = FALSE}
+lra <- ra_melt(ra = ra_g,
+               samples = smpl,
+               sample_name = "SAMPLE_NAME")
+
+mu <- data.table(aggregate(lra$RA,
+                           by = list(Week = lra$WEEK,
+                                     Treatment = lra$TREATMENT,
+                                     Genotype = lra$Genotype,
+                                     Genus = lra$Genus),
+                           FUN = "mean"))
+mu[, total := sum(x),
+   by = "Genus"]
+ul <- unique(mu[, c("Genus", 
+                    "total")])
+ul <- ul[order(total),]
+mu$Genus <- factor(mu$Genus,
+                   level = ul$Genus)
+mu$total <- NULL
+
+datatable(mu,
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10,
+                         Genus = list(list(3, 'desc')))) %>%
+  formatCurrency(columns = 5,
+                 currency = "",
+                 mark = ",",
+                 digits = 2)
+```
+
+```{r means_g_p0, fig.width = 9, fig.height = 7}
+mu$Trt_Genotype <- factor(paste(mu$Treatment,
+                                mu$Genotype,
+                                sep = "_"))
+mu1 <- droplevels(mu[Genus %in% levels(mu$Genus)[nlevels(mu$Genus):(nlevels(mu$Genus) - 35)], ])
+
+p0 <- ggplot(mu1,
+             aes(x = Week,
+                 y = x,
+                 group = Trt_Genotype)) +
+  facet_wrap(~ Genus,
+             scale = "free_y") +
+  geom_line(position = position_dodge(0.3)) +
+  geom_point(aes(fill = Trt_Genotype),
+             shape = 21,
+             size = 2,
+             alpha = 0.5,
+             position = position_dodge(0.3)) +
+  scale_x_discrete("") +
+  scale_y_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+
+tiff(filename = "tmp/wt_Genus_over_time.tiff",
+     height = 9,
+     width = 12,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p0)
+graphics.off()
+
+print(p0)
+```
+
+```{r means_f_p1, fig.height = 9, fig.width = 9}
+p1 <- ggplot(mu1,
+             aes(x = x,
+                 y = Genus,
+                 color = Trt_Genotype,
+                 shape = Week)) +
+  geom_point(size = 3,
+             alpha = 0.5) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed") +
+  scale_x_continuous("Relative Abundance (%)") +
+  theme(legend.position = "top")
+
+tiff(filename = "tmp/wt_Genus_ra.tiff",
+     height = 9,
+     width = 9,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+ggplotly(p1)
+```
+
+
+
+# Session Information
+```{r info,eval=TRUE}
+sessionInfo()
+```
