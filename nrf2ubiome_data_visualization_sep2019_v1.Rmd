@@ -158,7 +158,7 @@ ps0 <- subset_taxa(ps_sep2019,
 dim(ps0@otu_table@.Data)
 ```
   
-These 7,247 belonged to 12 Phyla. 311 of the OTUs (or 4.11% of bacterial OTUs) could not be mapped to a Phyla.
+Out of the 7,558 OTUs 7,247 belonged to 12 Phyla. 311 of the OTUs (or 4.11% of bacterial OTUs) could not be mapped to a phylum.
 
 ```{r phylum_mapping}
 t2 <- data.table(table(tax_table(ps0)[, "Phylum"],
@@ -236,9 +236,48 @@ ggplotly(p1)
 ```
 
 # Richness (Alpha diversity)
+Shannon index (aka Shannon enthrophy) is calculated as:  
+H' = -sum(1 to R)p(i)ln(p(i)) 
+When there is exactly 1 type of data (e.g. a single species in the sample), H'=0. The opposite scenario is when there are R>1 species present in the sample in the exact same amounts and H'=ln(R).  
+  
 Shannon's diversity index was calculated for each sample and ploted over time using the 7,764 from the 13 Phylum above.
+  
+```{r shannon_vs_depth, fig.height = 5, fig.width = 6}
+shannon.ndx <- estimate_richness(ps0,
+                                 measures = "Shannon")
 
-```{r richness, fig.width = 10,fig.height = 5}
+shannon.ndx <- data.table(SAMPLE_NAME = rownames(shannon.ndx),
+                          shannon.ndx)
+
+smpl <- merge(smpl,
+              shannon.ndx,
+              by = "SAMPLE_NAME")
+
+p1 <- ggplot(smpl,
+             aes(x = Total,
+                 y = Shannon,
+                 fill = Genotype,
+                 shape = WEEK)) +
+  geom_point(size = 2) +
+  scale_shape_manual(breaks = unique(smpl$WEEK),
+                     values = 21:23)
+
+tiff(filename = "tmp/shannon_vs_depth.tiff",
+     height = 5,
+     width = 6,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+ggplotly(p1)
+```
+
+Even though ***estimate_richness*** function does not adjust for the sequencing depth, there is no correlation between the index and the sample's sequecing depth. Proceed with the comparison.
+
+# Shannon idex over time
+```{r richness, fig.width = 4, fig.height = 5}
 p1 <- plot_richness(ps0,
                     x = "time", 
                     measures = "Shannon") +
@@ -272,38 +311,96 @@ print(p1)
 graphics.off()
 ```
 
-Test if the richness changed between the baseline and the week 8.
+The plot above suggests that the largest differences in alpha diversity (as measured by Shannon's index) are in genotype.
+  
+Test if the richness changed between the baseline and Week 8.  
+  
 ```{r lm_richness}
-tmp <- data.table(SAMPLE_NAME = p1$data$samples,
-                  Shannon = p1$data$value)
+smpl$TREATMENT <- factor(smpl$TREATMENT,
+                         levels = c("DSS",
+                                    "Naive",
+                                    "DSS+PEITC",
+                                    "DSS+Cranberry"))
 
-tmp <- merge(smpl,
-              tmp,
-              by = "SAMPLE_NAME")
-
-tmp$TREATMENT <- factor(tmp$TREATMENT,
-                        levels = c("DSS",
-                                   "Naive",
-                                   "DSS+PEITC",
-                                   "DSS+Cranberry"))
-
-tmp <- droplevels(tmp[WEEK != "week1"])
+tmp <- droplevels(smpl[WEEK != "week1"])
 
 m1 <- lm(Shannon  ~ WEEK*(TREATMENT + Genotype),
          # offset = Total,
          data = tmp)
 summary(m1)
 ```
-
+  
 ```{r lmer_richness}
 m2 <- lmer(Shannon  ~ WEEK*(TREATMENT + Genotype) + (1 | ID),
            # offset = Total,
            data = tmp)
 summary(m2)
 ```
-  
+
+# Calculate change in Shannon index from baseline
+```{r delta_shannon, fig.width = 7, fig.height = 5}
+dd <- smpl
+dd[, delta := Shannon - Shannon[WEEK == "baseline"],
+   by = ID]
+dd$diff <- paste(dd$WEEK,
+                 "-baseline",
+                 sep = "")
+
+dd <- dd[WEEK != "baseline",]
+
+p1 <- ggplot(dd,
+             aes(x = TREATMENT,
+                 y = delta,
+                 fill = Genotype)) +
+  facet_wrap(~ diff) +
+  geom_hline(yintercept = 0,
+             linetype = "dashed") +
+  geom_point(position = position_dodge(0.3),
+             shape = 21,
+             size = 3) +
+  scale_y_continuous("Shannon Index Percent Change from Baseline") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+print(p1)
+
+dd1$TREATMENT <- factor(dd1$TREATMENT,
+                        levels = c("DSS",
+                                   "Naive",
+                                   "DSS+PEITC",
+                                   "DSS+Cranberry"))
+dd1$Genotype <- factor(dd1$Genotype,
+                       levels = c("widetype",
+                                  "nrf2KO"))
+
+m1 <- lm(delta ~ TREATMENT*Genotype,
+         data = dd1)
+summary(m1)
+
+# No significant interactions, proceed with 2-way analysis
+m2 <- lm(delta ~ TREATMENT + Genotype,
+         data = dd1)
+summary(m2)
+```
+
+At Week 8 there was significantly smaller increase of alpha diversity from baseline in Nrf2 KO compared to WT, and in DSS+Cranberry compared to DSS only.
+
+# Load aminoacids
+```{r aminoacids}
+aa <- fread("data_sep2019/sep2019_aminoacids.csv")
+```
+
+
+
+CONTINUE HERE! (2/11/2020)
+
 The results showed that...
-  
+
+
+
+
+
+
+
 # Remove unmapped OTUs
 The 311 unmapped OTUs were removed from further analysis (with 7,247 OTUs left).
 ```{r remove_unmapped_otu_phylum}
@@ -947,7 +1044,7 @@ graphics.off()
 print(p0)
 ```
 
-```{r means_f_p1, fig.height = 9, fig.width = 9}
+```{r means_g_p1, fig.height = 9, fig.width = 9}
 p1 <- ggplot(mu1,
              aes(x = x,
                  y = Genus,
