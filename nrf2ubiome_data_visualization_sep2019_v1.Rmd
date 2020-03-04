@@ -363,44 +363,274 @@ p1 <- ggplot(dd,
                                    hjust = 1))
 print(p1)
 
-dd1$TREATMENT <- factor(dd1$TREATMENT,
+dd$TREATMENT <- factor(dd$TREATMENT,
                         levels = c("DSS",
                                    "Naive",
                                    "DSS+PEITC",
                                    "DSS+Cranberry"))
-dd1$Genotype <- factor(dd1$Genotype,
+dd$Genotype <- factor(dd$Genotype,
                        levels = c("widetype",
                                   "nrf2KO"))
 
 m1 <- lm(delta ~ TREATMENT*Genotype,
-         data = dd1)
+         data = dd)
 summary(m1)
 
 # No significant interactions, proceed with 2-way analysis
 m2 <- lm(delta ~ TREATMENT + Genotype,
-         data = dd1)
+         data = dd)
 summary(m2)
 ```
 
 At Week 8 there was significantly smaller increase of alpha diversity from baseline in Nrf2 KO compared to WT, and in DSS+Cranberry compared to DSS only.
 
 # Load aminoacids
-```{r aminoacids}
+```{r aminoacids_data}
 aa <- fread("data_sep2019/sep2019_aminoacids.csv")
+
+aa <- aa[!is.na(ID), ]
+aa$ID <- paste0(aa$ID,
+                aa$CAGE)
+
+smpl1 <- unique(smpl[, c("ID",
+                            "TREATMENT",
+                            "Genotype")])
+smpl1$ID <- as.character(smpl1$ID)
+aa <- merge(smpl1,
+            aa,
+            by = "ID")
+aa[, trt_week := paste(TREATMENT,
+                       WEEK,
+                       sep = "_")]
+aa$trt_week <- factor(aa$trt_week,
+                      levels = c("Naive_week2",
+                                 "Naive_week6",
+                                 "DSS_week2",
+                                 "DSS_week6",
+                                 "DSS+Cranberry_week2",
+                                 "DSS+Cranberry_week6" ,
+                                 "DSS+PEITC_week2",
+                                 "DSS+PEITC_week6"))
 ```
 
+```{r aminoacids_plots, fig.height = 4, fig.width = 5}
+for (i in 8:(ncol(aa) - 1)) {
+  tmp <- aa[, c(1, 3, 7, ncol(aa), i), with = FALSE]
+  colnames(tmp)[5] <- "Y"
+  p1 <- ggplot(tmp,
+               aes(x = trt_week,
+                   y = Y,
+                   fill = Genotype,
+                   group = ID)) +
+    geom_line(position = position_dodge(0.3)) +
+    geom_point(shape = 21,
+               size = 3,
+               position = position_dodge(0.3)) +
+    scale_x_discrete("") +
+    scale_y_continuous(colnames(aa)[i]) +
+    theme(axis.text.x = element_text(angle = 45,
+                                     hjust = 1))
+  # tiff(filename = paste0("tmp/",
+  #                        colnames(aa)[i],
+  #                        ".tiff"),
+  #      height = 4,
+  #      width = 5,
+  #      units = "in",
+  #      res = 600,
+  #      compression = "lzw+p")
+  # print(p1)
+  # graphics.off()
+  
+  print(p1)
+}
+```
+
+# Aminoacid data PCA
+```{r aminoacids_pca}
+dt_pca <- aa[, Alanine:glutamine]
+
+m1 <- prcomp(dt_pca)
+summary(m1)
 
 
-CONTINUE HERE! (2/11/2020)
+# Select PC-s to pliot (PC1 & PC2)
+choices <- 1:2
+# Scores, i.e. points (df.u)
+dt.scr <- data.table(m1$x[, choices])
+# Add grouping variable
+dt.scr$grp <- aa$trt_week
+dt.scr$TREATMENT <- aa$TREATMENT
+dt.scr$WEEK <- aa$WEEK
+dt.scr
 
-The results showed that...
+# Loadings, i.e. arrows (df.v)
+dt.rot <- as.data.frame(m1$rotation[, choices])
+dt.rot$feat <- rownames(dt.rot)
+dt.rot <- data.table(dt.rot)
+dt.rot
 
+dt.load <- melt.data.table(dt.rot,
+                           id.vars = "feat",
+                           measure.vars = 1:2,
+                           variable.name = "pc",
+                           value.name = "loading")
+dt.load$feat <- factor(dt.load$feat,
+                       levels = unique(dt.load$feat))
+# Plot loadings
+p0 <- ggplot(data = dt.load,
+             aes(x = feat,
+                 y = loading)) +
+  facet_wrap(~ pc,
+             nrow = 2) +
+  geom_bar(stat = "identity") +
+  ggtitle("PC Loadings") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1))
+tiff(filename = "tmp/pc.1.2_loadings.tiff",
+     height = 5,
+     width = 8,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p0)
+graphics.off()
 
+print(p0)
+```
 
+```{r aminoacids_pca_axes}
+# Axis labels
+u.axis.labs <- paste(colnames(dt.rot)[1:2], 
+                     sprintf('(%0.1f%% explained var.)', 
+                             100*m1$sdev[choices]^2/sum(m1$sdev^2)))
+u.axis.labs
+```
 
+```{r aminoacids_biplot, fig.height = 10, fig.width = 10}
+# Based on Figure p0, keep only a few variables with high loadings in PC1 and PC2----
+# var.keep.ndx <- which(dt.rot$feat %in% c(...))
+# Or select all
+# var.keep.ndx <- 3:ncol(dt1)
+# Use dt.rot[var.keep.ndx,] and dt.rot$feat[var.keep.ndx]
+p1 <- ggplot(data = dt.rot,
+             aes(x = PC1,
+                 y = PC2)) +
+  coord_equal() +
+  geom_point(data = dt.scr,
+             aes(fill = grp),
+             shape = 21,
+             size = 2,
+             alpha = 0.5) +
+  geom_segment(aes(x = 0,
+                   y = 0,
+                   xend = 10*PC1,
+                   yend = 10*PC2),
+               arrow = arrow(length = unit(1/2, 'picas')),
+               size = 1.2, 
+               color = "black") +
+  geom_text(aes(x = 11*PC1,
+                y = 11*PC2,
+                label = dt.rot$feat),
+            # size = 5,
+            hjust = 0.5) +
+  scale_x_continuous(u.axis.labs[1]) +
+  scale_y_continuous(u.axis.labs[2]) +
+  scale_fill_discrete(name = "Group") +
+  ggtitle("Biplot of Aminoacids") +
+  theme(plot.title = element_text(hjust = 0.5,
+                                  size = 20))
+tiff(filename = "tmp/aminoacids_biplot.tiff",
+     height = 10,
+     width = 10,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
 
+ggplotly(p1)
+```
 
+```{r aminoacids_biplot_by_week, fig.height = 10, fig.width = 10}
+p2 <- ggplot(data = dt.rot,
+             aes(x = PC1,
+                 y = PC2)) +
+  coord_equal() +
+  geom_point(data = dt.scr,
+             aes(fill = WEEK),
+             shape = 21,
+             size = 2,
+             alpha = 0.5) +
+  geom_segment(aes(x = 0,
+                   y = 0,
+                   xend = 10*PC1,
+                   yend = 10*PC2),
+               arrow = arrow(length = unit(1/2, 'picas')),
+               size = 1.2, 
+               color = "black") +
+  geom_text(aes(x = 11*PC1,
+                y = 11*PC2,
+                label = dt.rot$feat),
+            # size = 5,
+            hjust = 0.5) +
+  scale_x_continuous(u.axis.labs[1]) +
+  scale_y_continuous(u.axis.labs[2]) +
+  scale_fill_discrete(name = "Week") +
+  ggtitle("Biplot of Aminoacids") +
+  theme(plot.title = element_text(hjust = 0.5,
+                                  size = 20))
+tiff(filename = "tmp/aminoacids_by_week_biplot.tiff",
+     height = 10,
+     width = 10,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p2)
+graphics.off()
 
+ggplotly(p2)
+```
+
+```{r aminoacids_biplot_by_trt, fig.height = 10, fig.width = 10}
+p2 <- ggplot(data = dt.rot,
+             aes(x = PC1,
+                 y = PC2)) +
+  coord_equal() +
+  geom_point(data = dt.scr,
+             aes(fill = TREATMENT),
+             shape = 21,
+             size = 2,
+             alpha = 0.5) +
+  geom_segment(aes(x = 0,
+                   y = 0,
+                   xend = 10*PC1,
+                   yend = 10*PC2),
+               arrow = arrow(length = unit(1/2, 'picas')),
+               size = 1.2, 
+               color = "black") +
+  geom_text(aes(x = 11*PC1,
+                y = 11*PC2,
+                label = dt.rot$feat),
+            # size = 5,
+            hjust = 0.5) +
+  scale_x_continuous(u.axis.labs[1]) +
+  scale_y_continuous(u.axis.labs[2]) +
+  scale_fill_discrete(name = "Treatment") +
+  ggtitle("Biplot of Aminoacids") +
+  theme(plot.title = element_text(hjust = 0.5,
+                                  size = 20))
+tiff(filename = "tmp/aminoacids_by_trt_biplot.tiff",
+     height = 10,
+     width = 10,
+     units = 'in',
+     res = 300,
+     compression = "lzw+p")
+print(p2)
+graphics.off()
+
+ggplotly(p2)
+```
 # Remove unmapped OTUs
 The 311 unmapped OTUs were removed from further analysis (with 7,247 OTUs left).
 ```{r remove_unmapped_otu_phylum}
