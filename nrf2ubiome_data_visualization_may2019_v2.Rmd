@@ -42,9 +42,9 @@ options(stringsAsFactors = FALSE,
 
 # require(knitr)
 # require(kableExtra)
-# require(phyloseq)
 # require(shiny)
 
+require(phyloseq)
 require(data.table)
 require(ggplot2)
 require(plotly)
@@ -163,6 +163,102 @@ ps1 <- subset_taxa(ps0,
 dim(ps1@otu_table@.Data)
 ```
 
+# OTU table (first 10 rows)
+```{r otu_table, warning=FALSE,echo=FALSE,message=FALSE}
+otu <- data.table(ps0@tax_table@.Data,
+                  t(ps0@otu_table@.Data))
+datatable(head(otu, 10),
+          rownames = FALSE,
+          caption = "Taxonomic  count table",
+          class = "cell-border stripe",
+          options = list(search = FALSE,
+                         pageLength = 10)) %>%
+  formatCurrency(columns = 7:36,
+                 currency = "",
+                 mark = ",",
+                 digits = 0)
+```
+
+# Total counts per sample (i.e. sequencing depth)
+```{r Tax, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
+t1 <- colSums(otu[, 7:ncol(otu)])
+t1 <- data.table(SAMPLE_NAME = names(t1),
+                 Total = t1)
+
+tmp <- data.table(SAMPLE_NAME = samples$SAMPLE_NAME,
+                  TREATMENT = samples$TREATMENT,
+                  WEEK = samples$WEEK)
+
+smpl <- merge(tmp,
+            t1,
+            by = "SAMPLE_NAME")
+
+p1 <- ggplot(smpl,
+             aes(x = SAMPLE_NAME,
+                 y = Total,
+                 fill = TREATMENT,
+                 colour = WEEK)) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete("Sample Name") +
+  scale_y_continuous("Number of Reads") +
+  scale_fill_discrete("Group") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1)) 
+ggplotly(p1)
+```
+
+```{r seq_depth_greyscale, , fig.width = 6, fig.height = 4}
+tmp <- copy(smpl)
+tmp$WEEK <- factor(tmp$WEEK,
+                    levels = c("week 0",
+                               "week 1",
+                               "week 4"),
+                    labels = c("Week 0",
+                               "Week 1",
+                               "Week 4"))
+
+tmp$TREATMENT <- factor(tmp$TREATMENT,
+                        levels = c("Control",
+                                   "PEITC"),
+                        labels = c("AIN93M",
+                                   "PEITC"))
+p1 <- ggplot(tmp,
+             aes(x = SAMPLE_NAME,
+                 y = Total,
+                 group = TREATMENT,
+                 fill = TREATMENT)) +
+  facet_wrap(~ WEEK,
+             scale = "free_x") +
+  geom_bar(stat = "identity",
+           color = "black") +
+  scale_x_discrete("") +
+  scale_y_continuous("Number of Reads") +
+  scale_fill_grey("Treatment", 
+                  start = 0.2, 
+                  end = 0.8,
+                  na.value = "red",
+                  aesthetics = "fill") +
+  theme_bw() + 
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        legend.position = "top")
+
+tiff(filename = "tmp/seq_depth_may2019.tiff",
+     height = 4,
+     width = 6,
+     units = "in",
+     res = 600,
+     compression = "lzw+p")
+print(p1)
+graphics.off()
+
+print(p1)
+```
+
 # Richness (Alpha diversity)
 Shannon's diversity index was calculated for each sample and ploted over time using the 7,764 from the 13 Phylum above.
 
@@ -236,50 +332,6 @@ m3
   
 The results showed that in 4 out of 5 animals in the PEITC group diversity increased over the 4 weeks compared to the baseline. At the same time, only 2 out of 5 Control animals increased its microbial diversity in the same period of time. NOTE: there was no statistically significant difference between the treatment groups as well as over time (see results above).  
   
-# OTU table (first 10 rows)
-```{r otu_table, warning=FALSE,echo=FALSE,message=FALSE}
-otu <- data.table(ps0@tax_table@.Data,
-                  t(ps0@otu_table@.Data))
-datatable(head(otu, 10),
-          rownames = FALSE,
-          caption = "Taxonomic  count table",
-          class = "cell-border stripe",
-          options = list(search = FALSE,
-                         pageLength = 10)) %>%
-  formatCurrency(columns = 7:36,
-                 currency = "",
-                 mark = ",",
-                 digits = 0)
-```
-
-# Total counts per sample (i.e. sequencing depth)
-```{r Tax, warning=FALSE,echo=FALSE,message=FALSE,fig.width=10,fig.height=5}
-t1 <- colSums(otu[, 7:ncol(otu)])
-t1 <- data.table(SAMPLE_NAME = names(t1),
-                 Total = t1)
-
-tmp <- data.table(SAMPLE_NAME = samples$SAMPLE_NAME,
-                  TREATMENT = samples$TREATMENT,
-                  WEEK = samples$WEEK)
-
-t1 <- merge(tmp,
-            t1,
-            by = "SAMPLE_NAME")
-
-p1 <- ggplot(t1,
-             aes(x = SAMPLE_NAME,
-                 y = Total,
-                 fill = TREATMENT,
-                 colour = WEEK)) +
-  geom_bar(stat = "identity") +
-  scale_x_discrete("Sample Name") +
-  scale_y_continuous("Number of Reads") +
-  scale_fill_discrete("Group") +
-  theme(axis.text.x = element_text(angle = 45,
-                                   hjust = 1)) 
-ggplotly(p1)
-```
-
 # Counts at Phylum level
 ```{r counts_p, warning=FALSE,echo=FALSE,message=FALSE}
 counts_p <- counts_by_tax_rank(dt1 = otu,
