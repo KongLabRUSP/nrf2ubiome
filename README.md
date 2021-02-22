@@ -12,6 +12,22 @@
 [Files](#files)
 [References](#ref)   
 
+# LARGE FILE STORAGE SETUP
+1. Download and install Git LFS here:
+https://git-lfs.github.com/
+
+2. At each repository, run:
+git lfs install
+git lfs track "*.Rmd"
+git lfs track "*.RData"
+...
+git add .gitattributes
+
+3. Commit files
+
+# REMOVE ALL PENDING COMMITS
+git reset --hard origin/master
+
 ## Daily Logs<a name="logs"></a>
 ### 10/25/2019
 * New data received: WT + Nrf2 KO (-/-) treated with PEITC or canberry. New script for data processing: 
