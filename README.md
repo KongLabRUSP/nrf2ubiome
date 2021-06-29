@@ -29,6 +29,10 @@ git add .gitattributes
 git reset --hard origin/master
 
 ## Daily Logs<a name="logs"></a>
+### 4/13/2021
+* Downloaded original metabollics data file from Ran's gmail, Feb 9, 2020: ***Rutgers mouse feces_quan.xlsx***. The original download was deleted, probably while I was setting up LFS.
+* Extracted metabolites from the original Excel into 3 separate CSV files: aminoacids, 
+
 ### 10/25/2019
 * New data received: WT + Nrf2 KO (-/-) treated with PEITC or canberry. New script for data processing: 
 
